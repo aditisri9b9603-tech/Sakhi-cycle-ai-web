@@ -13,13 +13,23 @@ export const db = (firebaseConfig as any).firestoreDatabaseId
 // Initialize Auth
 export const auth = getAuth(app);
 
-// Google Auth Provider with Google Workspace Scopes
+// Standard Google Auth Provider for App Login (Profile & Email ONLY)
+// Note: Standard scopes require NO Google OAuth App Verification and work for all Google accounts.
 export const googleAuthProvider = new GoogleAuthProvider();
-googleAuthProvider.addScope('https://mail.google.com/');
-googleAuthProvider.addScope('https://www.googleapis.com/auth/chat.spaces');
-googleAuthProvider.addScope('https://www.googleapis.com/auth/chat.messages.create');
-googleAuthProvider.addScope('https://www.googleapis.com/auth/forms.body');
-googleAuthProvider.addScope('https://www.googleapis.com/auth/forms.responses.readonly');
+googleAuthProvider.addScope('profile');
+googleAuthProvider.addScope('email');
+googleAuthProvider.setCustomParameters({
+  prompt: 'select_account',
+});
+
+// Dedicated Google Workspace Auth Provider (Gmail, Chat, Forms)
+// Used selectively in the Workspace Hub when the user requests Google Workspace linkage.
+export const workspaceGoogleAuthProvider = new GoogleAuthProvider();
+workspaceGoogleAuthProvider.addScope('https://mail.google.com/');
+workspaceGoogleAuthProvider.addScope('https://www.googleapis.com/auth/chat.spaces');
+workspaceGoogleAuthProvider.addScope('https://www.googleapis.com/auth/chat.messages.create');
+workspaceGoogleAuthProvider.addScope('https://www.googleapis.com/auth/forms.body');
+workspaceGoogleAuthProvider.addScope('https://www.googleapis.com/auth/forms.responses.readonly');
 
 // Standard Firestore Error Handling Helper
 export enum OperationType {

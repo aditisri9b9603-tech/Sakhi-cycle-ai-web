@@ -294,6 +294,28 @@ const MainLayout: React.FC = () => {
             {/* 2. TRACK SECTION */}
             {activeSection === 'track' && (
               <div className="space-y-6">
+                <div className="relative rounded-3xl overflow-hidden border border-white/60 shadow-lg bg-white/40">
+                  <div className="relative h-44 sm:h-52 w-full overflow-hidden">
+                    <img
+                      src={IMAGES.bgCloudTrack}
+                      alt="Track rhythm cloud sanctuary"
+                      className="w-full h-full object-cover object-center"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#3D1E28]/85 via-[#3D1E28]/50 to-transparent flex items-center p-6 sm:p-8">
+                      <div className="text-white max-w-lg space-y-1.5">
+                        <span className="text-xs uppercase tracking-wider font-bold text-[#F4A6B8] bg-white/20 px-3 py-0.5 rounded-full backdrop-blur-xs">
+                          Rhythm & Daily Log Sanctuary
+                        </span>
+                        <h2 className="text-2xl sm:text-3xl font-serif font-bold text-white">
+                          Track Your Natural Flow
+                        </h2>
+                        <p className="text-xs sm:text-sm text-[#FCECEF]">
+                          Log your symptoms, flow, and moods daily with cloud-synced precision and hormonal phase prediction.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 {activeSubSection === 'calendar' && <CycleCalendar />}
                 {activeSubSection === 'log' && <DailyLog />}
                 {activeSubSection === 'insights' && <InsightsDashboard />}
@@ -303,6 +325,28 @@ const MainLayout: React.FC = () => {
             {/* 3. LEARN SECTION */}
             {activeSection === 'learn' && (
               <div className="space-y-6">
+                <div className="relative rounded-3xl overflow-hidden border border-white/60 shadow-lg bg-white/40">
+                  <div className="relative h-44 sm:h-52 w-full overflow-hidden">
+                    <img
+                      src={IMAGES.bgCloudLearn}
+                      alt="Learn & Wellness cloud sanctuary"
+                      className="w-full h-full object-cover object-center"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#3D1E28]/85 via-[#3D1E28]/50 to-transparent flex items-center p-6 sm:p-8">
+                      <div className="text-white max-w-lg space-y-1.5">
+                        <span className="text-xs uppercase tracking-wider font-bold text-[#F4A6B8] bg-white/20 px-3 py-0.5 rounded-full backdrop-blur-xs">
+                          Empowerment & Education
+                        </span>
+                        <h2 className="text-2xl sm:text-3xl font-serif font-bold text-white">
+                          Learn, Sync & Consult
+                        </h2>
+                        <p className="text-xs sm:text-sm text-[#FCECEF]">
+                          Phase-based nutrition, verified gynecologist sweep cards, and video masterclass tutorials.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 {activeSubSection === 'lifestyle' && <LifestyleSection />}
                 {activeSubSection === 'products' && <ProductsSection />}
                 {activeSubSection === 'doctors' && <DoctorsSection />}
@@ -312,6 +356,28 @@ const MainLayout: React.FC = () => {
             {/* 4. COMMUNITY SECTION */}
             {activeSection === 'community' && (
               <div className="space-y-6">
+                <div className="relative rounded-3xl overflow-hidden border border-white/60 shadow-lg bg-white/40">
+                  <div className="relative h-44 sm:h-52 w-full overflow-hidden">
+                    <img
+                      src={IMAGES.bgCloudCommunity}
+                      alt="Community support cloud sanctuary"
+                      className="w-full h-full object-cover object-center"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#3D1E28]/85 via-[#3D1E28]/50 to-transparent flex items-center p-6 sm:p-8">
+                      <div className="text-white max-w-lg space-y-1.5">
+                        <span className="text-xs uppercase tracking-wider font-bold text-[#F4A6B8] bg-white/20 px-3 py-0.5 rounded-full backdrop-blur-xs">
+                          Companionship & Care
+                        </span>
+                        <h2 className="text-2xl sm:text-3xl font-serif font-bold text-white">
+                          Safe Circles & Flo Partner Support
+                        </h2>
+                        <p className="text-xs sm:text-sm text-[#FCECEF]">
+                          Pseudonymous community circles, anonymous cycle buddies, and empathetic partner sharing.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 {activeSubSection === 'forum' && <ForumSection />}
                 {activeSubSection === 'buddy' && <BuddySection />}
                 {activeSubSection === 'partner' && <PartnerSection />}
@@ -319,7 +385,33 @@ const MainLayout: React.FC = () => {
             )}
 
             {/* 5. VIBES SECTION */}
-            {activeSection === 'vibes' && <VibesSection />}
+            {activeSection === 'vibes' && (
+              <div className="space-y-6">
+                <div className="relative rounded-3xl overflow-hidden border border-white/60 shadow-lg bg-white/40">
+                  <div className="relative h-44 sm:h-52 w-full overflow-hidden">
+                    <img
+                      src={IMAGES.vibesBreathe}
+                      alt="Vibes and tranquility sanctuary"
+                      className="w-full h-full object-cover object-center"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#3D1E28]/85 via-[#3D1E28]/50 to-transparent flex items-center p-6 sm:p-8">
+                      <div className="text-white max-w-lg space-y-1.5">
+                        <span className="text-xs uppercase tracking-wider font-bold text-[#F4A6B8] bg-white/20 px-3 py-0.5 rounded-full backdrop-blur-xs">
+                          Inner Peace & Sonic Sanctuary
+                        </span>
+                        <h2 className="text-2xl sm:text-3xl font-serif font-bold text-white">
+                          Calm, Breathe & Restore
+                        </h2>
+                        <p className="text-xs sm:text-sm text-[#FCECEF]">
+                          4-7-8 guided somatic breathing, binaural cycle playlists, and daily uplifting affirmations.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <VibesSection />
+              </div>
+            )}
 
             {/* 6. WORKSPACE INTEGRATION SECTION (Gmail, Chat, Forms) */}
             {activeSection === 'workspace' && <WorkspaceHub />}

@@ -16,7 +16,11 @@ import {
   CheckCircle,
   Plus,
   Minus,
+  Cloud,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export const DailyLog: React.FC = () => {
   const {
@@ -26,7 +30,12 @@ export const DailyLog: React.FC = () => {
     language,
     selectedCalendarDate,
     setSelectedCalendarDate,
+    syncStatus,
+    lastSyncedTime,
+    syncAllLogsToCloud,
   } = useApp();
+
+  const { user } = useAuth();
 
   const t = (key: string, params?: Record<string, string | number>) =>
     getTranslation(language, key, params);
@@ -40,6 +49,8 @@ export const DailyLog: React.FC = () => {
   const [waterGlasses, setWaterGlasses] = useState<number>(8);
   const [notes, setNotes] = useState<string>('');
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
 
   // Sync state when selected date changes or existing log loads
   useEffect(() => {
@@ -61,6 +72,7 @@ export const DailyLog: React.FC = () => {
       setWaterGlasses(8);
       setNotes('');
     }
+    setConfirmDelete(false);
   }, [date, dailyLogs]);
 
   const handleDateChange = (newDate: string) => {
@@ -72,6 +84,16 @@ export const DailyLog: React.FC = () => {
     setSymptoms((prev) =>
       prev.includes(symp) ? prev.filter((s) => s !== symp) : [...prev, symp]
     );
+  };
+
+  const handleManualSync = async () => {
+    setIsManualSyncing(true);
+    const success = await syncAllLogsToCloud();
+    setIsManualSyncing(false);
+    if (success) {
+      setFeedbackMsg('All daily logs synced with Firebase Cloud!');
+      setTimeout(() => setFeedbackMsg(null), 3500);
+    }
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -87,16 +109,15 @@ export const DailyLog: React.FC = () => {
       notes,
     };
     saveDailyLog(entry);
-    setFeedbackMsg(t('entrySaved'));
+    setFeedbackMsg(user ? 'Entry saved and synced to cloud! ☁️' : t('entrySaved'));
     setTimeout(() => setFeedbackMsg(null), 3500);
   };
 
   const handleDelete = () => {
-    if (window.confirm('Delete log for this day?')) {
-      deleteDailyLog(date);
-      setFeedbackMsg(t('entryDeleted'));
-      setTimeout(() => setFeedbackMsg(null), 3000);
-    }
+    deleteDailyLog(date);
+    setConfirmDelete(false);
+    setFeedbackMsg(t('entryDeleted'));
+    setTimeout(() => setFeedbackMsg(null), 3000);
   };
 
   const moodsList: { id: MoodType; emoji: string; labelKey: string }[] = [
@@ -155,6 +176,51 @@ export const DailyLog: React.FC = () => {
             className="text-xs font-semibold text-[#3D1E28] bg-transparent focus:outline-none"
           />
         </div>
+      </div>
+
+      {/* Cloud Sync Status & Manual Trigger Bar */}
+      <div className="p-4 bg-white/90 backdrop-blur-md rounded-2xl border border-[#F4D5DC] flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-[#FFF0F3] text-[#D9658B] flex items-center justify-center">
+            <Cloud className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-[#3D1E28]">Cloud Sync</span>
+              {user ? (
+                <span className="px-2 py-0.5 rounded-full bg-[#F3FAF5] text-[#226947] font-semibold text-[11px] border border-[#BFE7D0] inline-flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3 text-[#58B988]" />
+                  <span>Firebase Connected</span>
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full bg-[#FFF8F8] text-[#7E5265] font-medium text-[11px] border border-[#F4D5DC]">
+                  Local Device Storage
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-[#7E5265] mt-0.5">
+              {syncStatus === 'syncing' || isManualSyncing
+                ? 'Syncing entries to cloud...'
+                : syncStatus === 'synced'
+                ? `All logs securely backed up in Firestore (${lastSyncedTime ? `Last synced at ${lastSyncedTime}` : 'Up to date'})`
+                : user
+                ? 'Ready to sync with Firebase'
+                : 'Sign in to automatically sync your logs across all devices.'}
+            </div>
+          </div>
+        </div>
+
+        {user && (
+          <button
+            type="button"
+            onClick={handleManualSync}
+            disabled={isManualSyncing}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FFF0F3] hover:bg-[#FCECEF] text-[#D9658B] border border-[#F4D5DC] rounded-xl font-bold transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isManualSyncing ? 'animate-spin' : ''}`} />
+            <span>{isManualSyncing ? 'Syncing...' : 'Sync Logs Now'}</span>
+          </button>
+        )}
       </div>
 
       {feedbackMsg && (
@@ -387,14 +453,34 @@ export const DailyLog: React.FC = () => {
         {/* Bottom CTA actions */}
         <div className="flex items-center justify-between gap-4 pt-2">
           {hasExistingEntry ? (
-            <button
-              type="button"
-              onClick={handleDelete}
-              className="flex items-center gap-1.5 px-4 py-3 rounded-2xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Delete Check-in</span>
-            </button>
+            confirmDelete ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-rose-700 font-semibold">Delete entry?</span>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700"
+                >
+                  Yes, Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold text-[#7E5265] bg-slate-100 hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="flex items-center gap-1.5 px-4 py-3 rounded-2xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Check-in</span>
+              </button>
+            )
           ) : (
             <div />
           )}

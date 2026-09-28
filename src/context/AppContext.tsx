@@ -46,6 +46,9 @@ interface AppContextType {
   setPartnerModeActive: (active: boolean) => void;
   selectedCalendarDate: string;
   setSelectedCalendarDate: (date: string) => void;
+  syncStatus: 'idle' | 'syncing' | 'synced' | 'local_only' | 'error';
+  lastSyncedTime: string | null;
+  syncAllLogsToCloud: () => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -248,34 +251,111 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : DEFAULT_BUDDY_PROFILE;
   });
 
-  // Real-time Firestore synchronization when user is signed in
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'local_only' | 'error'>('idle');
+  const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
+
+  // Sync all current logs to Firestore cloud
+  const syncAllLogsToCloud = async (): Promise<boolean> => {
+    if (!auth.currentUser) {
+      setSyncStatus('local_only');
+      return false;
+    }
+    setSyncStatus('syncing');
+    try {
+      const uid = auth.currentUser.uid;
+      // Sync cycle settings
+      await setDoc(
+        doc(db, 'users', uid, 'cycleSettings', 'current'),
+        {
+          ...cycleSettings,
+          userId: uid,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      // Sync all daily logs
+      const entries = Object.values(dailyLogs);
+      for (const entry of entries) {
+        await setDoc(
+          doc(db, 'users', uid, 'dailyLogs', entry.date),
+          {
+            ...entry,
+            userId: uid,
+            updatedAt: entry.updatedAt || new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      }
+
+      setSyncStatus('synced');
+      setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      return true;
+    } catch (err) {
+      console.warn('Sync all logs error:', err);
+      setSyncStatus('error');
+      return false;
+    }
+  };
+
+  // Real-time Firestore synchronization when user signs in
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (!currentUser) return;
+      if (!currentUser) {
+        setSyncStatus('local_only');
+        return;
+      }
+
+      setSyncStatus('syncing');
       try {
-        // Fetch cycleSettings from Firestore
+        // 1. Fetch cycleSettings from Firestore
         const settingsDoc = await getDoc(doc(db, 'users', currentUser.uid, 'cycleSettings', 'current'));
         if (settingsDoc.exists()) {
           setCycleSettings(settingsDoc.data() as CycleSettings);
+        } else {
+          // Upload local settings
+          await setDoc(
+            doc(db, 'users', currentUser.uid, 'cycleSettings', 'current'),
+            { ...cycleSettings, userId: currentUser.uid, updatedAt: new Date().toISOString() },
+            { merge: true }
+          );
         }
 
-        // Fetch partnerPermissions from Firestore
+        // 2. Fetch partnerPermissions from Firestore
         const permDoc = await getDoc(doc(db, 'users', currentUser.uid, 'partnerPermissions', 'current'));
         if (permDoc.exists()) {
           setPartnerPermissions(permDoc.data() as PartnerPermissions);
         }
 
-        // Fetch dailyLogs from Firestore
+        // 3. Fetch dailyLogs from Firestore
         const logsSnapshot = await getDocs(collection(db, 'users', currentUser.uid, 'dailyLogs'));
+        const cloudLogs: Record<string, DailyLogEntry> = {};
         if (!logsSnapshot.empty) {
-          const cloudLogs: Record<string, DailyLogEntry> = {};
           logsSnapshot.forEach((d) => {
             cloudLogs[d.id] = d.data() as DailyLogEntry;
           });
-          setDailyLogs((prev) => ({ ...prev, ...cloudLogs }));
         }
+
+        // Merge cloud logs and local logs (preserving user's entries)
+        const mergedLogs = { ...dailyLogs, ...cloudLogs };
+        setDailyLogs(mergedLogs);
+
+        // Upload any local entries that aren't yet in Firestore
+        for (const [dateKey, entry] of Object.entries(dailyLogs)) {
+          if (!cloudLogs[dateKey]) {
+            await setDoc(
+              doc(db, 'users', currentUser.uid, 'dailyLogs', dateKey),
+              { ...entry, userId: currentUser.uid },
+              { merge: true }
+            );
+          }
+        }
+
+        setSyncStatus('synced');
+        setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       } catch (err) {
-        console.warn('Firestore initial load error:', err);
+        console.warn('Firestore initial sync error:', err);
+        setSyncStatus('error');
       }
     });
 
@@ -336,14 +416,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
 
     if (auth.currentUser) {
+      setSyncStatus('syncing');
       try {
-        await setDoc(doc(db, 'users', auth.currentUser.uid, 'dailyLogs', entry.date), {
-          ...updatedEntry,
-          userId: auth.currentUser.uid,
-        }, { merge: true });
+        await setDoc(
+          doc(db, 'users', auth.currentUser.uid, 'dailyLogs', entry.date),
+          {
+            ...updatedEntry,
+            userId: auth.currentUser.uid,
+          },
+          { merge: true }
+        );
+        setSyncStatus('synced');
+        setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       } catch (e) {
         console.warn('Firestore save dailyLog error:', e);
+        setSyncStatus('error');
       }
+    } else {
+      setSyncStatus('local_only');
     }
   };
 
@@ -509,6 +599,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setPartnerModeActive,
         selectedCalendarDate,
         setSelectedCalendarDate,
+        syncStatus,
+        lastSyncedTime,
+        syncAllLogsToCloud,
       }}
     >
       {children}

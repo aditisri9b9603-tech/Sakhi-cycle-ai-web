@@ -48,11 +48,15 @@ export const Navigation: React.FC = () => {
     clearAuthNotice,
     signInWithGoogle,
     signInAsGuest,
+    signInWithEmail,
     logout,
   } = useAuth();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'options' | 'email'>('options');
+  const [emailInput, setEmailInput] = useState('');
+  const [passInput, setPassInput] = useState('');
 
   const t = (key: string, params?: Record<string, string | number>) =>
     getTranslation(language, key, params);
@@ -355,34 +359,97 @@ export const Navigation: React.FC = () => {
               </p>
             </div>
 
-            <div className="space-y-3 pt-2">
-              <button
-                onClick={handleGoogleClick}
-                disabled={isSigningIn}
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white hover:bg-slate-50 text-[#3D1E28] border border-slate-300 rounded-2xl text-xs font-bold shadow-xs transition-all active:scale-[0.98] disabled:opacity-70"
-              >
-                {isSigningIn ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-[#D9658B]" />
-                ) : (
-                  <svg className="w-4 h-4" viewBox="0 0 48 48">
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                  </svg>
-                )}
-                <span>Continue with Google</span>
-              </button>
+            {authMode === 'options' ? (
+              <div className="space-y-3 pt-2">
+                <button
+                  onClick={handleGoogleClick}
+                  disabled={isSigningIn}
+                  className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white hover:bg-slate-50 text-[#3D1E28] border border-slate-300 rounded-2xl text-xs font-bold shadow-xs transition-all active:scale-[0.98] disabled:opacity-70"
+                >
+                  {isSigningIn ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-[#D9658B]" />
+                  ) : (
+                    <svg className="w-4 h-4" viewBox="0 0 48 48">
+                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                    </svg>
+                  )}
+                  <span>Continue with Google</span>
+                </button>
 
-              <button
-                onClick={handleGuestClick}
-                disabled={isSigningIn}
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#FFF5F7] hover:bg-[#FCECEF] text-[#D9658B] border border-[#F4D5DC] rounded-2xl text-xs font-bold transition-all active:scale-[0.98] disabled:opacity-70"
+                <button
+                  onClick={handleGuestClick}
+                  disabled={isSigningIn}
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#FFF5F7] hover:bg-[#FCECEF] text-[#D9658B] border border-[#F4D5DC] rounded-2xl text-xs font-bold transition-all active:scale-[0.98] disabled:opacity-70"
+                >
+                  <UserIcon className="w-4 h-4" />
+                  <span>Instant Guest Mode (Cloud Sync)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAuthMode('email')}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-slate-50 hover:bg-slate-100 text-[#7E5265] border border-slate-200 rounded-2xl text-xs font-semibold transition-all"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Sign In with Email & Password</span>
+                </button>
+              </div>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!emailInput || !passInput) return;
+                  const ok = await signInWithEmail(emailInput, passInput);
+                  if (ok) {
+                    setAuthModalOpen(false);
+                    setAuthMode('options');
+                  }
+                }}
+                className="space-y-3 pt-2 text-left"
               >
-                <UserIcon className="w-4 h-4" />
-                <span>Instant Guest Mode (Cloud Sync)</span>
-              </button>
-            </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#7E5265] mb-1">Email</label>
+                  <input
+                    type="email"
+                    required
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-1 focus:ring-[#D9658B]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#7E5265] mb-1">Password</label>
+                  <input
+                    type="password"
+                    required
+                    value={passInput}
+                    onChange={(e) => setPassInput(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-1 focus:ring-[#D9658B]"
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setAuthMode('options')}
+                    className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#7E5265] bg-slate-100 hover:bg-slate-200"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSigningIn}
+                    className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-[#D9658B] hover:bg-[#C54E74] shadow-xs disabled:opacity-60"
+                  >
+                    {isSigningIn ? 'Signing In...' : 'Sign In / Register'}
+                  </button>
+                </div>
+              </form>
+            )}
 
             <p className="text-[11px] text-[#7E5265]/80 pt-1">
               Protected by Firebase Cloud Storage with strict private security rules.

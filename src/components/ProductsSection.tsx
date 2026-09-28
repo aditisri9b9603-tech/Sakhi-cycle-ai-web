@@ -22,6 +22,9 @@ interface YoutubeTutorial {
   duration: string;
   category: 'products' | 'cramp-relief' | 'cycle-syncing' | 'doctor-qa';
   description: string;
+  keySteps: string[];
+  bestPractices: string[];
+  clinicalTakeaway: string;
 }
 
 const YOUTUBE_TUTORIALS_LIBRARY: YoutubeTutorial[] = [
@@ -33,6 +36,17 @@ const YOUTUBE_TUTORIALS_LIBRARY: YoutubeTutorial[] = [
     duration: '8:45',
     category: 'products',
     description: 'Learn the punch-down and C-fold techniques, how to check the seal, and gentle removal without pain.',
+    keySteps: [
+      'Boil the cup in water for 5 minutes before your cycle begins.',
+      'Fold the rim using the punch-down technique to create a tapered entry point.',
+      'Insert at a 45-degree angle toward the base of your spine, not straight up.',
+      'Rotate gently or run a clean finger around the base to verify the suction seal opened fully.',
+    ],
+    bestPractices: [
+      'Relax pelvic floor muscles completely; tensing makes insertion uncomfortable.',
+      'Pinch the base to break the vacuum before pulling down for removal.',
+    ],
+    clinicalTakeaway: 'Medical-grade silicone does not disturb the natural vaginal flora or pH, significantly reducing fungal risk compared to bleached rayon fibers.',
   },
   {
     id: 'yt-2',
@@ -42,6 +56,17 @@ const YOUTUBE_TUTORIALS_LIBRARY: YoutubeTutorial[] = [
     duration: '6:12',
     category: 'products',
     description: 'Why chlorine-free and unbleached cotton prevents friction, contact rashes, and vulvar dermatitis.',
+    keySteps: [
+      'Change pads every 4 to 6 hours regardless of flow lightness to prevent bacterial growth.',
+      'Opt for chlorine-free, fragrance-free certified unbleached organic cotton.',
+      'Wash the external vulva with plain warm water only; never douche inside.',
+      'Wear breathable 100% cotton underwear to promote airflow and prevent moisture traps.',
+    ],
+    bestPractices: [
+      'Always wipe from front to back to avoid bacterial contamination.',
+      'Keep extra pads or period undies sealed in a clean breathable pouch.',
+    ],
+    clinicalTakeaway: 'Fragrances and synthetic top-sheets in conventional sanitary pads are a leading cause of vulvar allergic contact dermatitis in adolescents.',
   },
   {
     id: 'yt-3',
@@ -51,6 +76,17 @@ const YOUTUBE_TUTORIALS_LIBRARY: YoutubeTutorial[] = [
     duration: '5:30',
     category: 'products',
     description: 'Cold-water rinsing and air-drying secrets to maintain leak-proof membranes for 3+ years.',
+    keySteps: [
+      'Rinse under cold running water immediately after wearing until water runs clear.',
+      'Machine wash on a delicate cold cycle without fabric softener or bleach.',
+      'Hang to air dry in a well-ventilated or sunlit area; never tumble dry on high heat.',
+      'Test your flow capacity at home first before relying on them for full active work days.',
+    ],
+    bestPractices: [
+      'Fabric softeners coat the microscopic absorbent fibers, ruining their capillary absorbency.',
+      'Heat damages the polyurethane laminate (PUL) waterproof barrier.',
+    ],
+    clinicalTakeaway: 'High-quality period underwear provides safe secondary protection during heavy spotting and reduces single-use plastic waste by up to 90%.',
   },
   {
     id: 'yt-4',
@@ -60,6 +96,17 @@ const YOUTUBE_TUTORIALS_LIBRARY: YoutubeTutorial[] = [
     duration: '15:20',
     category: 'cramp-relief',
     description: 'Restorative child pose, supported bridge, and reclined butterfly to release lower belly tension.',
+    keySteps: [
+      'Supta Baddha Konasana (Reclined Butterfly) with a cushion under knees for 5 minutes.',
+      'Balasana (Wide-Knee Child Pose) resting forehead on a folded bolster.',
+      'Viparita Karani (Legs Up the Wall) to facilitate pelvic venous drainage.',
+      'Deep somatic diaphragmatic breathing: 4 counts in through nose, 6 counts out through mouth.',
+    ],
+    bestPractices: [
+      'Avoid strenuous inversions (like headstands or intense abdominal crunches) during heavy flow.',
+      'Keep warm blankets on the lower back and feet to prevent cold-induced vascular constriction.',
+    ],
+    clinicalTakeaway: 'Somatic stretching activates the parasympathetic nervous system, decreasing uterine prostaglandin release and reducing perceived cramping intensity.',
   },
   {
     id: 'yt-5',
@@ -69,6 +116,17 @@ const YOUTUBE_TUTORIALS_LIBRARY: YoutubeTutorial[] = [
     duration: '7:55',
     category: 'cramp-relief',
     description: 'Using heat packs on the sacrum, acupressure on Spleen 6 point, and anti-inflammatory ginger tea.',
+    keySteps: [
+      'Apply thermal compress or heating pad (40°C - 45°C) to lower abdomen or sacrum for 20 mins.',
+      'Sip fresh warm ginger and chamomile tea with a pinch of Ceylon cinnamon.',
+      'Locate SP6 (San Yin Jiao) 4 finger-widths above the inner ankle bone; massage gently in circles.',
+      'Take magnesium glycinate (200-300mg with doctor consult) to support smooth muscle relaxation.',
+    ],
+    bestPractices: [
+      'Never apply naked boiling water bottles directly to bare skin; use a cotton sleeve.',
+      'Start warm ginger infusions 2 days before anticipated period onset for best prostaglandin inhibition.',
+    ],
+    clinicalTakeaway: 'Topical continuous low-level heat has been clinically shown in randomized trials to be as effective as standard ibuprofen for primary dysmenorrhea relief.',
   },
   {
     id: 'yt-6',
@@ -78,6 +136,17 @@ const YOUTUBE_TUTORIALS_LIBRARY: YoutubeTutorial[] = [
     duration: '12:10',
     category: 'cycle-syncing',
     description: 'How estrogen and progesterone shift your metabolic calorie needs and when to focus on strength vs rest.',
+    keySteps: [
+      'Menstrual: Focus on iron-rich broths, restorative movement, and extra sleep.',
+      'Follicular: Rising estrogen boosts stamina; ideal for high-intensity workouts and fresh leafy greens.',
+      'Ovulatory: Peak energy and metabolic drive; great for HIIT, social connection, and fiber-rich meals.',
+      'Luteal: Progesterone increases resting metabolic rate by 100-300 kcal; eat complex carbs and magnesium.',
+    ],
+    bestPractices: [
+      'Do not severely cut calories during the luteal phase; hunger is biological and hormonally mediated.',
+      'Shift to seed cycling: pumpkin & flax in phase 1; sunflower & sesame in phase 2.',
+    ],
+    clinicalTakeaway: 'Understanding that metabolic rate naturally increases during the luteal phase prevents guilt surrounding increased appetite before menstruation.',
   },
   {
     id: 'yt-7',
@@ -87,6 +156,17 @@ const YOUTUBE_TUTORIALS_LIBRARY: YoutubeTutorial[] = [
     duration: '14:40',
     category: 'doctor-qa',
     description: 'Real gynecologists answer frequently asked questions about missed periods, spotting, and hormonal tests.',
+    keySteps: [
+      'Track bleeding duration: Normal period length is 3-7 days; cycles range between 21-35 days.',
+      'Notice “Red Flags”: Bleeding requiring pad change every 1-2 hours, or periods absent for 90+ days.',
+      'Understand PCOS markers: Irregular cycles, excess facial hair (hirsutism), stubborn cystic acne.',
+      'Prepare for doctor visits: Bring 3-6 months of tracked cycle logs from Sakhi Cycle.',
+    ],
+    bestPractices: [
+      'Never ignore persistent intermenstrual spotting (bleeding between periods).',
+      'Schedule gynaecological wellness checkups every 1-2 years or when unusual pain occurs.',
+    ],
+    clinicalTakeaway: 'Keeping a continuous objective cycle log empowers clinicians to differentiate between transient stress-induced anovulation and chronic conditions like PCOS or endometriosis.',
   },
 ];
 
@@ -498,7 +578,37 @@ export const ProductsSection: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center justify-between text-xs text-[#7E5265]">
+            {/* Explainable Step-by-Step & Clinical Breakdown */}
+            <div className="space-y-3 pt-2 border-t border-[#FCECEF] max-h-56 overflow-y-auto pr-1">
+              <div>
+                <h5 className="text-xs font-bold uppercase tracking-wider text-[#3D1E28] mb-1.5 flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-[#58B988]" />
+                  <span>Explainable Step-by-Step Guide</span>
+                </h5>
+                <ol className="space-y-1.5 text-xs text-[#7E5265]">
+                  {activeVideoModal.keySteps?.map((step, idx) => (
+                    <li key={idx} className="flex items-start gap-2 bg-[#FFF8F8] p-2 rounded-xl border border-[#F4D5DC]/60">
+                      <span className="w-4 h-4 rounded-full bg-[#FCECEF] text-[#D9658B] font-bold text-[10px] flex items-center justify-center shrink-0">
+                        {idx + 1}
+                      </span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              {activeVideoModal.clinicalTakeaway && (
+                <div className="p-3 rounded-xl bg-[#F3FAF5] border border-[#BFE7D0] text-[#226947] text-xs space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#58B988]" />
+                    <span>Gynecologist Clinical Takeaway</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed">{activeVideoModal.clinicalTakeaway}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-[#7E5265] pt-2 border-t border-[#FCECEF]">
               <span>Channel: {activeVideoModal.channel}</span>
               <a
                 href={`https://www.youtube.com/watch?v=${activeVideoModal.youtubeId}`}

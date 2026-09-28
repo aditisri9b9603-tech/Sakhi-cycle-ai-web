@@ -15,6 +15,7 @@ import {
   FileCheck,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { IMAGES } from '../assets/images';
 
 interface RealDoctor {
   id: string;
@@ -32,6 +33,7 @@ interface RealDoctor {
   appointmentUrl: string;
   officialEmail: string;
   bio: string;
+  photoUrl: string;
   photoEmoji: string;
 }
 
@@ -52,6 +54,7 @@ const REAL_LIFE_DOCTORS: RealDoctor[] = [
     appointmentUrl: 'https://www.fortishealthcare.com/doctors',
     officialEmail: 'anita.gupta@fortishealthcare.com',
     bio: 'Over 30 years of dedicated practice in adolescent menstrual disorders, uterine health, and compassionate maternal care.',
+    photoUrl: IMAGES.docAnitaGupta,
     photoEmoji: '👩‍⚕️',
   },
   {
@@ -70,6 +73,7 @@ const REAL_LIFE_DOCTORS: RealDoctor[] = [
     appointmentUrl: 'https://www.jaslokhospital.net/doctors',
     officialEmail: 'dr.parikh@jaslokhospital.net',
     bio: 'World-renowned authority in reproductive endocrinology, pioneering treatments for hormonal imbalance and uterine wellness.',
+    photoUrl: IMAGES.docFiruzaParikh,
     photoEmoji: '🩺',
   },
   {
@@ -88,6 +92,7 @@ const REAL_LIFE_DOCTORS: RealDoctor[] = [
     appointmentUrl: 'https://gynaecworld.com',
     officialEmail: 'consult@gynaecworld.com',
     bio: 'Founder president of the PCOS Society of India, championing youth menstrual education, hormonal balance, and lifestyle harmony.',
+    photoUrl: IMAGES.docDuruShah,
     photoEmoji: '🌸',
   },
   {
@@ -106,25 +111,8 @@ const REAL_LIFE_DOCTORS: RealDoctor[] = [
     appointmentUrl: 'https://www.lilavatihospital.com',
     officialEmail: 'drpai@lilavatihospital.com',
     bio: 'Former president of the Federation of Obstetric & Gynaecological Societies of India, leading nationwide women health initiatives.',
+    photoUrl: IMAGES.docHrishikeshPai,
     photoEmoji: '👨‍⚕️',
-  },
-  {
-    id: 'dr-veena-bhat',
-    name: 'Dr. Veena Bhat',
-    qualifications: 'MBBS, MD (Obstetrics & Gynaecology)',
-    title: 'Senior Director of Obstetrics & Gynaecology',
-    hospital: 'Artemis Hospitals',
-    location: 'Sector 51, Gurugram, Haryana, India',
-    specialties: ['Dysmenorrhea (Severe Cramps)', 'Fibroids & Endometriosis', 'Minimally Invasive Surgery'],
-    registrationNumber: 'HN-4392',
-    council: 'Haryana State Medical Council',
-    experienceYears: 33,
-    consultationFee: 'Standard Hospital Tariff',
-    teleconsultAvailable: true,
-    appointmentUrl: 'https://www.artemishospitals.com/doctors',
-    officialEmail: 'veena.bhat@artemishospitals.com',
-    bio: 'Renowned expert in the alleviation of severe pelvic and menstrual pain, minimally invasive techniques, and preventative care.',
-    photoEmoji: '👩‍⚕️',
   },
   {
     id: 'dr-sangeeta-agrawal',
@@ -142,6 +130,7 @@ const REAL_LIFE_DOCTORS: RealDoctor[] = [
     appointmentUrl: 'https://www.maxhealthcare.com/doctors',
     officialEmail: 'sangeeta.agrawal@maxhealthcare.com',
     bio: 'AIIMS alumna dedicated to holistic gynecological care, combining evidence-based medicine with nutrition and lifestyle syncing.',
+    photoUrl: IMAGES.docSangeetaAgrawal,
     photoEmoji: '🩺',
   },
 ];
@@ -278,9 +267,16 @@ export const DoctorsSection: React.FC = () => {
         >
           {/* Top Credentials & Badge */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#FCECEF] pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#FFF0F3] to-[#FCECEF] border border-[#F4D5DC] flex items-center justify-center text-3xl shadow-xs">
-                {currentDoctor.photoEmoji}
+            <div className="flex items-center gap-3.5">
+              <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-white shadow-md bg-[#FFF0F3] shrink-0">
+                <img
+                  src={currentDoctor.photoUrl}
+                  alt={currentDoctor.name}
+                  className="w-full h-full object-cover object-top"
+                />
+                <div className="absolute bottom-0 inset-x-0 bg-[#3D1E28]/70 py-0.5 text-center">
+                  <span className="text-[8px] sm:text-[9px] text-white font-bold tracking-wider uppercase">Verified</span>
+                </div>
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
