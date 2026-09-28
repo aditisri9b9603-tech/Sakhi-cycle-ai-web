@@ -1,0 +1,6 @@
+{
+  "name": "Sakhi Cycle",
+  "description": "A caring, premium menstrual cycle tracker, daily wellness companion, partner support space, and holistic health sanctuary.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
