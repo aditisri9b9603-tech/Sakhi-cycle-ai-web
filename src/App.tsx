@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navigation } from './components/Navigation';
 import { CycleRing } from './components/CycleRing';
@@ -13,6 +14,7 @@ import { BuddySection } from './components/BuddySection';
 import { PartnerSection } from './components/PartnerSection';
 import { VibesSection } from './components/VibesSection';
 import { SettingsSection } from './components/SettingsSection';
+import { WorkspaceHub } from './components/WorkspaceHub';
 import { SakhiAIChat } from './components/SakhiAIChat';
 import { calculateCycleStatus, PHASE_COLORS } from './utils/cycleCalculations';
 import { getTranslation } from './utils/translations';
@@ -30,6 +32,11 @@ import {
   Smile,
   BookOpen,
   Coffee,
+  Award,
+  Mail,
+  Video,
+  Database,
+  Cloud,
 } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
@@ -43,6 +50,7 @@ const MainLayout: React.FC = () => {
     partnerModeActive,
   } = useApp();
 
+  const { user } = useAuth();
   const [isAIChatModalOpen, setIsAIChatModalOpen] = useState(false);
 
   const t = (key: string, params?: Record<string, string | number>) =>
@@ -52,7 +60,12 @@ const MainLayout: React.FC = () => {
   const phaseTheme = PHASE_COLORS[status.currentPhase];
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FFF8F8] text-[#3D1E28] pb-20 md:pb-12">
+    <div className="min-h-screen flex flex-col text-[#3D1E28] pb-20 md:pb-12 relative overflow-hidden">
+      {/* Ambient Dreamy Floating Cloud Orbs in Background */}
+      <div className="fixed -top-40 -left-40 w-96 h-96 rounded-full cloud-glow-1 pointer-events-none -z-10 blur-3xl opacity-60 animate-pulse" />
+      <div className="fixed top-1/3 -right-40 w-[500px] h-[500px] rounded-full cloud-glow-2 pointer-events-none -z-10 blur-3xl opacity-50" />
+      <div className="fixed -bottom-40 left-1/4 w-[600px] h-[600px] rounded-full cloud-glow-1 pointer-events-none -z-10 blur-3xl opacity-40" />
+
       {/* Sticky Top Navigation */}
       <Navigation />
 
@@ -67,8 +80,8 @@ const MainLayout: React.FC = () => {
             {activeSection === 'home' && (
               <div className="space-y-8 sm:space-y-12">
                 {/* Cinematic Hero Section with Translucent Glass Panel */}
-                <div className="relative rounded-3xl overflow-hidden border border-[#F4D5DC] shadow-sm bg-white">
-                  <div className="relative h-[380px] sm:h-[460px] w-full overflow-hidden">
+                <div className="relative rounded-3xl overflow-hidden border border-white/60 shadow-lg bg-white/40 backdrop-blur-md">
+                  <div className="relative h-[400px] sm:h-[480px] w-full overflow-hidden">
                     <img
                       src={IMAGES.heroWellness}
                       alt="Gentle pink dawn light and floating petals"
@@ -81,18 +94,27 @@ const MainLayout: React.FC = () => {
 
                     {/* Translucent Glass-Style Content Panel */}
                     <div className="absolute inset-0 flex items-center p-6 sm:p-12">
-                      <div className="max-w-xl backdrop-blur-md bg-white/20 p-6 sm:p-8 rounded-3xl border border-white/30 shadow-lg text-white space-y-4">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/25 text-xs font-semibold tracking-wide backdrop-blur-xs">
-                          <span>🌸</span>
+                      <div className="max-w-xl backdrop-blur-xl bg-white/20 p-6 sm:p-8 rounded-3xl border border-white/40 shadow-2xl text-white space-y-4">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/25 text-xs font-semibold tracking-wide backdrop-blur-xs border border-white/30">
+                          <img
+                            src={IMAGES.sakhiLogo}
+                            alt="Logo"
+                            className="w-4 h-4 rounded-full"
+                          />
                           <span>{t('todayGreeting')}</span>
+                          {user && (
+                            <span className="text-[#FCECEF] font-bold">
+                              · {user.displayName?.split(' ')[0]}
+                            </span>
+                          )}
                         </div>
 
-                        <h1 className="text-3xl sm:text-5xl font-serif font-bold tracking-tight leading-tight text-white drop-shadow-xs">
-                          Attuned to Your Body’s Sacred Seasons
+                        <h1 className="text-3xl sm:text-5xl font-serif font-bold tracking-tight leading-tight text-white drop-shadow-sm">
+                          Understand • Track • Thrive
                         </h1>
 
                         <p className="text-xs sm:text-sm text-[#FCECEF] leading-relaxed max-w-lg">
-                          A private wellness sanctuary designed for intelligent cycle awareness, consensual partner care, soothing herbal wisdom, and emotional harmony.
+                          Your holistic menstrual sanctuary. Powered by real-time Firebase syncing, sweeping doctor care cards, Flo-inspired partner solidarity, and Google Workspace integrations.
                         </p>
 
                         <div className="pt-2 flex flex-wrap items-center gap-3">
@@ -101,18 +123,29 @@ const MainLayout: React.FC = () => {
                               setActiveSection('track');
                               setActiveSubSection('log');
                             }}
-                            className="px-6 py-3 bg-[#D9658B] hover:bg-[#C54E74] text-white rounded-2xl text-xs sm:text-sm font-bold shadow-md shadow-[#D9658B]/30 transition-all active:scale-[0.98] flex items-center gap-2"
+                            className="px-6 py-3 bg-[#D9658B] hover:bg-[#C54E74] text-white rounded-2xl text-xs sm:text-sm font-bold shadow-lg shadow-[#D9658B]/30 transition-all active:scale-[0.98] flex items-center gap-2"
                           >
                             <Heart className="w-4 h-4 fill-white/20" />
                             <span>{t('logTodayCTA')}</span>
                           </button>
 
                           <button
-                            onClick={() => setIsAIChatModalOpen(true)}
+                            onClick={() => {
+                              setActiveSection('learn');
+                              setActiveSubSection('doctors');
+                            }}
                             className="px-5 py-3 bg-white/25 hover:bg-white/35 backdrop-blur-md text-white border border-white/40 rounded-2xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2"
                           >
+                            <Award className="w-4 h-4 text-[#F4A6B8]" />
+                            <span>Sweep Doctors</span>
+                          </button>
+
+                          <button
+                            onClick={() => setIsAIChatModalOpen(true)}
+                            className="px-4 py-3 bg-white/15 hover:bg-white/25 backdrop-blur-md text-white border border-white/30 rounded-2xl text-xs font-semibold transition-all flex items-center gap-1.5"
+                          >
                             <Sparkles className="w-4 h-4 text-[#F4A6B8]" />
-                            <span>Ask Sakhi AI</span>
+                            <span>Sakhi AI</span>
                           </button>
                         </div>
                       </div>
@@ -139,7 +172,7 @@ const MainLayout: React.FC = () => {
                   {/* Right: Today's Phase Care Card & Fast Actions (7 cols) */}
                   <div className="lg:col-span-7 space-y-4">
                     {/* Current Phase Snapshot Card */}
-                    <div className="p-6 bg-white/95 rounded-3xl border border-[#F4D5DC] shadow-xs space-y-4">
+                    <div className="glass-card p-6 rounded-3xl space-y-4">
                       <div className="flex items-center justify-between">
                         <span
                           className="text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full"
@@ -157,7 +190,7 @@ const MainLayout: React.FC = () => {
                       </h3>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                        <div className="p-3.5 rounded-2xl bg-[#FFF8F8] border border-[#F4D5DC] space-y-1">
+                        <div className="p-3.5 rounded-2xl bg-white/70 border border-[#F4D5DC] space-y-1">
                           <div className="text-xs font-bold text-[#3D1E28] flex items-center gap-1.5">
                             <Coffee className="w-3.5 h-3.5 text-[#D9658B]" />
                             <span>Today’s Nourishment</span>
@@ -167,7 +200,7 @@ const MainLayout: React.FC = () => {
                           </p>
                         </div>
 
-                        <div className="p-3.5 rounded-2xl bg-[#FFF8F8] border border-[#F4D5DC] space-y-1">
+                        <div className="p-3.5 rounded-2xl bg-white/70 border border-[#F4D5DC] space-y-1">
                           <div className="text-xs font-bold text-[#3D1E28] flex items-center gap-1.5">
                             <Smile className="w-3.5 h-3.5 text-[#58B988]" />
                             <span>Recommended Movement</span>
@@ -203,64 +236,54 @@ const MainLayout: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Flo-Inspired Partner Support Feature Spotlight */}
-                    <div className="p-6 bg-gradient-to-r from-white via-[#FFF0F3] to-white rounded-3xl border border-[#F4D5DC] shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    {/* Sweeping Real-Life Doctors Spotlight */}
+                    <div className="glass-card p-6 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="space-y-1">
                         <div className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider font-bold text-[#D9658B]">
-                          <ShieldCheck className="w-3.5 h-3.5" />
-                          <span>Flo-Inspired Partner Care</span>
+                          <Award className="w-3.5 h-3.5" />
+                          <span>Sweeping Card Directory</span>
                         </div>
                         <h4 className="text-base font-serif font-bold text-[#3D1E28]">
-                          Bring Your Partner Into the Loop Safely
+                          Certified Real-Life Gynaecologists
                         </h4>
                         <p className="text-xs text-[#7E5265] max-w-md">
-                          Share your energetic phase and PMS comfort tips without revealing your private journal notes or symptoms.
+                          Swipe through verified specialists, hospital portals, and direct medical consultation inquiries.
                         </p>
                       </div>
 
                       <button
                         onClick={() => {
-                          setActiveSection('community');
-                          setActiveSubSection('partner');
+                          setActiveSection('learn');
+                          setActiveSubSection('doctors');
                         }}
-                        className="px-5 py-2.5 bg-white border border-[#D9658B] text-[#D9658B] hover:bg-[#FCECEF] rounded-2xl text-xs font-bold shadow-xs whitespace-nowrap transition-colors"
+                        className="px-5 py-2.5 bg-[#D9658B] text-white hover:bg-[#C54E74] rounded-2xl text-xs font-bold shadow-xs whitespace-nowrap transition-colors"
                       >
-                        Configure Sharing
+                        Sweep Doctors Stack
                       </button>
                     </div>
 
-                    {/* Quick Access Grid: Vibes & Community */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <button
-                        onClick={() => {
-                          setActiveSection('vibes');
-                          setActiveSubSection('breathe');
-                        }}
-                        className="p-5 bg-white rounded-3xl border border-[#F4D5DC] shadow-xs text-left hover:border-[#D9658B]/50 transition-all group"
-                      >
-                        <span className="text-2xl">🌬️</span>
-                        <h5 className="text-sm font-serif font-bold text-[#3D1E28] mt-2 group-hover:text-[#D9658B] transition-colors">
-                          4-7-8 Guided Breathwork
-                        </h5>
-                        <p className="text-xs text-[#7E5265] mt-0.5">
-                          Soothe your nervous system and release abdominal tension.
+                    {/* Google Workspace & Cloud Sync Spotlight */}
+                    <div className="glass-card p-6 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider font-bold text-[#58B988]">
+                          <Mail className="w-3.5 h-3.5" />
+                          <span>Google Workspace & Cloud Sync</span>
+                        </div>
+                        <h4 className="text-base font-serif font-bold text-[#3D1E28]">
+                          Gmail Inquiries, Google Chat & Forms
+                        </h4>
+                        <p className="text-xs text-[#7E5265] max-w-md">
+                          Send clinic consultation emails, post wellness alerts to Chat spaces, and survey symptoms with Google Forms.
                         </p>
-                      </button>
+                      </div>
 
                       <button
                         onClick={() => {
-                          setActiveSection('vibes');
-                          setActiveSubSection('playlists');
+                          setActiveSection('workspace');
                         }}
-                        className="p-5 bg-white rounded-3xl border border-[#F4D5DC] shadow-xs text-left hover:border-[#D9658B]/50 transition-all group"
+                        className="px-5 py-2.5 bg-white border border-[#58B988] text-[#226947] hover:bg-[#F3FAF5] rounded-2xl text-xs font-bold shadow-xs whitespace-nowrap transition-colors"
                       >
-                        <span className="text-2xl">🎵</span>
-                        <h5 className="text-sm font-serif font-bold text-[#3D1E28] mt-2 group-hover:text-[#D9658B] transition-colors">
-                          Bollywood Sufi & Lofi Chai
-                        </h5>
-                        <p className="text-xs text-[#7E5265] mt-0.5">
-                          Immerse in gentle acoustic melodies with Spotify integration.
-                        </p>
+                        Open Workspace
                       </button>
                     </div>
                   </div>
@@ -298,7 +321,10 @@ const MainLayout: React.FC = () => {
             {/* 5. VIBES SECTION */}
             {activeSection === 'vibes' && <VibesSection />}
 
-            {/* 6. SETTINGS SECTION */}
+            {/* 6. WORKSPACE INTEGRATION SECTION (Gmail, Chat, Forms) */}
+            {activeSection === 'workspace' && <WorkspaceHub />}
+
+            {/* 7. SETTINGS SECTION */}
             {activeSection === 'settings' && <SettingsSection />}
           </>
         )}
@@ -307,7 +333,7 @@ const MainLayout: React.FC = () => {
       {/* Floating Sakhi AI Assistant Button (Bottom Right) */}
       <button
         onClick={() => setIsAIChatModalOpen(true)}
-        className="fixed bottom-20 md:bottom-8 right-5 z-40 flex items-center gap-2.5 px-4 py-3 bg-[#D9658B] hover:bg-[#C54E74] text-white rounded-full shadow-lg shadow-[#D9658B]/30 transition-all hover:scale-105 active:scale-95 border border-white/20 focus-visible:outline-none"
+        className="fixed bottom-20 lg:bottom-8 right-5 z-40 flex items-center gap-2.5 px-4 py-3 bg-[#D9658B] hover:bg-[#C54E74] text-white rounded-full shadow-xl shadow-[#D9658B]/30 transition-all hover:scale-105 active:scale-95 border border-white/40 focus-visible:outline-none"
         title="Open Sakhi AI Wellness Companion"
       >
         <span className="text-lg">🌸</span>
@@ -317,7 +343,7 @@ const MainLayout: React.FC = () => {
       {/* Sakhi AI Modal */}
       {isAIChatModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="relative w-full max-w-xl bg-white rounded-3xl overflow-hidden shadow-2xl border border-[#F4D5DC]">
+          <div className="relative w-full max-w-xl glass-card bg-white rounded-3xl overflow-hidden shadow-2xl border border-white/60">
             <button
               onClick={() => setIsAIChatModalOpen(false)}
               className="absolute top-4 right-4 z-10 p-2 text-[#7E5265] hover:text-[#3D1E28] rounded-full hover:bg-[#FFF0F3] transition-colors"
@@ -331,13 +357,13 @@ const MainLayout: React.FC = () => {
       )}
 
       {/* Loving Footer */}
-      <footer className="mt-16 pt-8 pb-4 border-t border-[#F4D5DC]/60 text-center text-xs text-[#7E5265] space-y-2">
-        <div className="flex items-center justify-center gap-2 text-sm font-serif font-bold text-[#3D1E28]">
-          <span>🌸</span>
+      <footer className="mt-16 pt-8 pb-4 border-t border-white/60 text-center text-xs text-[#7E5265] space-y-2">
+        <div className="flex items-center justify-center gap-2.5 text-sm font-serif font-bold text-[#3D1E28]">
+          <img src={IMAGES.sakhiLogo} alt="Logo" className="w-5 h-5 rounded-full" />
           <span>Sakhi Cycle</span>
         </div>
         <p className="max-w-md mx-auto text-[11px] leading-relaxed">
-          Dedicated to every woman’s comfort, autonomy, and body wisdom. Created with loving care, scientific respect, and strict privacy principles.
+          Understand • Track • Thrive. Protected by Firebase cloud persistence, Google Workspace integration, and compassionate privacy standards.
         </p>
         <div className="pt-2 text-[10px] text-[#7E5265]/70">
           Not intended as a substitute for professional medical advice, diagnosis, or clinical treatment.
@@ -349,8 +375,10 @@ const MainLayout: React.FC = () => {
 
 export default function App() {
   return (
-    <AppProvider>
-      <MainLayout />
-    </AppProvider>
+    <AuthProvider>
+      <AppProvider>
+        <MainLayout />
+      </AppProvider>
+    </AuthProvider>
   );
 }

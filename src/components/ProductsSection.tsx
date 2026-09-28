@@ -10,7 +10,85 @@ import {
   Play,
   ShoppingBag,
   HelpCircle,
+  Video,
+  Sparkles,
 } from 'lucide-react';
+
+interface YoutubeTutorial {
+  id: string;
+  youtubeId: string;
+  title: string;
+  channel: string;
+  duration: string;
+  category: 'products' | 'cramp-relief' | 'cycle-syncing' | 'doctor-qa';
+  description: string;
+}
+
+const YOUTUBE_TUTORIALS_LIBRARY: YoutubeTutorial[] = [
+  {
+    id: 'yt-1',
+    youtubeId: '72_YmB7vDqg',
+    title: 'How to Use a Menstrual Cup: Step-by-Step Beginners Guide & Folds',
+    channel: 'Menstrual Health Foundation',
+    duration: '8:45',
+    category: 'products',
+    description: 'Learn the punch-down and C-fold techniques, how to check the seal, and gentle removal without pain.',
+  },
+  {
+    id: 'yt-2',
+    youtubeId: 'qj8bQ3HnNvg',
+    title: 'Period Hygiene, Changing Frequency & Choosing Organic Cotton',
+    channel: 'Women Wellness Guild',
+    duration: '6:12',
+    category: 'products',
+    description: 'Why chlorine-free and unbleached cotton prevents friction, contact rashes, and vulvar dermatitis.',
+  },
+  {
+    id: 'yt-3',
+    youtubeId: 'X94gGfB9aYg',
+    title: 'How Period Underwear Works: Multi-Layer Absorbency, Care & Machine Washing',
+    channel: 'Sustainable Flow',
+    duration: '5:30',
+    category: 'products',
+    description: 'Cold-water rinsing and air-drying secrets to maintain leak-proof membranes for 3+ years.',
+  },
+  {
+    id: 'yt-4',
+    youtubeId: '2L2lnxIcNmo',
+    title: '15-Minute Gentle Yoga for Menstrual Cramps & Pelvic Pain Relief',
+    channel: 'Somatic Healing Yoga',
+    duration: '15:20',
+    category: 'cramp-relief',
+    description: 'Restorative child pose, supported bridge, and reclined butterfly to release lower belly tension.',
+  },
+  {
+    id: 'yt-5',
+    youtubeId: '7x_x9dY1x2s',
+    title: 'Natural Home Remedies for Cramps: Thermal Compresses, Ginger & Acupressure',
+    channel: 'Ayurvedic & Modern Health',
+    duration: '7:55',
+    category: 'cramp-relief',
+    description: 'Using heat packs on the sacrum, acupressure on Spleen 6 point, and anti-inflammatory ginger tea.',
+  },
+  {
+    id: 'yt-6',
+    youtubeId: 'kJQP7kiw5Fk',
+    title: 'Hormonal Cycle Syncing: Eating & Moving in Tune with Your 4 Phases',
+    channel: 'Holistic Reproductive Science',
+    duration: '12:10',
+    category: 'cycle-syncing',
+    description: 'How estrogen and progesterone shift your metabolic calorie needs and when to focus on strength vs rest.',
+  },
+  {
+    id: 'yt-7',
+    youtubeId: 'fJ9rUzIMcZQ',
+    title: 'Gynecologist Q&A: Irregular Periods, PCOS Symptoms & When to See a Doctor',
+    channel: 'FOGSI Women Health Channel',
+    duration: '14:40',
+    category: 'doctor-qa',
+    description: 'Real gynecologists answer frequently asked questions about missed periods, spotting, and hormonal tests.',
+  },
+];
 
 const PRODUCTS_DATA: PeriodProduct[] = [
   {
@@ -36,7 +114,7 @@ const PRODUCTS_DATA: PeriodProduct[] = [
     cleaningInstructions: 'Boil in clean rolling water for 5 minutes between monthly cycles. Rinse with cold water before re-insertion.',
     wearTimeHours: '8 – 12 hours',
     ecoImpact: 'Reusable / Low',
-    tutorialYoutubeId: '72_YmB7vDqg', // Menstrual cup beginners tutorial
+    tutorialYoutubeId: '72_YmB7vDqg',
     tutorialTitle: 'How to Use a Menstrual Cup: Step-by-Step Beginners Guide',
   },
   {
@@ -119,6 +197,7 @@ export const ProductsSection: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedProduct, setSelectedProduct] = useState<PeriodProduct>(PRODUCTS_DATA[0]);
+  const [activeVideoModal, setActiveVideoModal] = useState<YoutubeTutorial | null>(null);
 
   const categories = [
     { id: 'all', label: 'All Essentials' },
@@ -137,19 +216,19 @@ export const ProductsSection: React.FC = () => {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Top Banner and Filter Bar */}
-      <div className="p-6 bg-white/95 rounded-3xl border border-[#F4D5DC] shadow-xs space-y-4">
+      <div className="glass-card p-6 rounded-3xl space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
               <ShoppingBag className="w-5 h-5 text-[#D9658B]" />
               <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#3D1E28]">
-                Period Products & Video Tutorials
+                Period Products & Comprehensive YouTube Tutorials
               </h2>
             </div>
             <p className="text-xs sm:text-sm text-[#7E5265] mt-1">
-              Honest guides, usage steps, pros & cons, and verified educational video tutorials.
+              Honest guides, usage steps, pros & cons, and verified educational video tutorials across all categories.
             </p>
           </div>
 
@@ -158,10 +237,10 @@ export const ProductsSection: React.FC = () => {
             <Search className="w-4 h-4 text-[#7E5265] absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search products or guides..."
+              placeholder="Search products or videos..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-2 focus:ring-[#D9658B]"
+              className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-[#F4D5DC] bg-white/90 focus:outline-none focus:ring-2 focus:ring-[#D9658B]"
             />
           </div>
         </div>
@@ -175,7 +254,7 @@ export const ProductsSection: React.FC = () => {
               className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
                 selectedCategory === cat.id
                   ? 'bg-[#D9658B] text-white shadow-xs'
-                  : 'bg-[#FFF8F8] text-[#7E5265] hover:bg-[#FFF0F3] border border-[#F4D5DC]/60'
+                  : 'bg-white/80 text-[#7E5265] hover:bg-white border border-[#F4D5DC]/70'
               }`}
             >
               {cat.label}
@@ -196,8 +275,8 @@ export const ProductsSection: React.FC = () => {
                 onClick={() => setSelectedProduct(prod)}
                 className={`w-full p-4 rounded-2xl border text-left transition-all ${
                   isSelected
-                    ? 'bg-white border-[#D9658B] ring-2 ring-[#D9658B]/20 shadow-sm'
-                    : 'bg-white/80 border-[#F4D5DC] hover:bg-white hover:border-[#D9658B]/50'
+                    ? 'glass-card bg-white border-[#D9658B] ring-2 ring-[#D9658B]/20 shadow-md'
+                    : 'bg-white/70 border-[#F4D5DC] hover:bg-white hover:border-[#D9658B]/50'
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -220,9 +299,9 @@ export const ProductsSection: React.FC = () => {
           })}
         </div>
 
-        {/* Right: Selected Product In-Depth Guide & Tutorial Embed */}
+        {/* Right: Selected Product In-Depth Guide & YouTube Embed */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="p-6 bg-white/95 rounded-3xl border border-[#F4D5DC] shadow-xs space-y-5">
+          <div className="glass-card p-6 sm:p-8 rounded-3xl space-y-5">
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs uppercase tracking-wider font-semibold text-[#D9658B] bg-[#FCECEF] px-2.5 py-0.5 rounded-full">
@@ -233,7 +312,7 @@ export const ProductsSection: React.FC = () => {
                   <span>{selectedProduct.ecoImpact}</span>
                 </span>
               </div>
-              <h3 className="text-xl font-serif font-bold text-[#3D1E28] mt-1">
+              <h3 className="text-xl sm:text-2xl font-serif font-bold text-[#3D1E28] mt-1">
                 {selectedProduct.name}
               </h3>
               <p className="text-xs sm:text-sm text-[#7E5265] mt-1 leading-relaxed">
@@ -243,7 +322,7 @@ export const ProductsSection: React.FC = () => {
 
             {/* Pros and Cons */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 rounded-2xl bg-[#F3FAF5] border border-[#BFE7D0] space-y-2">
+              <div className="p-4 rounded-2xl bg-[#F3FAF5]/90 border border-[#BFE7D0] space-y-2">
                 <div className="text-xs font-bold text-[#226947] flex items-center gap-1.5">
                   <Check className="w-4 h-4 text-[#58B988]" />
                   <span>Advantages</span>
@@ -258,7 +337,7 @@ export const ProductsSection: React.FC = () => {
                 </ul>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[#FFF8F8] border border-[#F4D5DC] space-y-2">
+              <div className="p-4 rounded-2xl bg-[#FFF8F8]/90 border border-[#F4D5DC] space-y-2">
                 <div className="text-xs font-bold text-[#D9658B] flex items-center gap-1.5">
                   <HelpCircle className="w-4 h-4 text-[#D9658B]" />
                   <span>Considerations</span>
@@ -277,11 +356,11 @@ export const ProductsSection: React.FC = () => {
             {/* Step-by-Step Instructions */}
             <div className="space-y-2 pt-2">
               <h4 className="text-xs font-bold uppercase tracking-wider text-[#3D1E28]">
-                How to Use Comfortably
+                Step-by-Step Guide
               </h4>
               <ol className="space-y-2 text-xs text-[#7E5265]">
                 {selectedProduct.usageSteps.map((step, idx) => (
-                  <li key={idx} className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[#FFF8F8] border border-[#F4D5DC]/60">
+                  <li key={idx} className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/80 border border-[#F4D5DC]/60">
                     <span className="w-5 h-5 rounded-full bg-[#FCECEF] text-[#D9658B] font-bold text-[11px] flex items-center justify-center shrink-0">
                       {idx + 1}
                     </span>
@@ -297,7 +376,7 @@ export const ProductsSection: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <Play className="w-4 h-4 text-[#E25574]" />
                   <span className="text-xs font-bold text-[#3D1E28]">
-                    Video Tutorial: {selectedProduct.tutorialTitle}
+                    Featured Video: {selectedProduct.tutorialTitle}
                   </span>
                 </div>
                 <a
@@ -311,8 +390,8 @@ export const ProductsSection: React.FC = () => {
                 </a>
               </div>
 
-              {/* YouTube Embed Container with clean iframe and error fallback */}
-              <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-black/5 border border-[#F4D5DC]">
+              {/* YouTube Embed Container */}
+              <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-black/10 border border-[#F4D5DC] shadow-xs">
                 <iframe
                   src={`https://www.youtube-nocookie.com/embed/${selectedProduct.tutorialYoutubeId}`}
                   title={selectedProduct.tutorialTitle}
@@ -325,6 +404,115 @@ export const ProductsSection: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* COMPLETE YOUTUBE INTEGRATIONS LIBRARY */}
+      <div className="glass-card p-6 sm:p-8 rounded-3xl space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Video className="w-5 h-5 text-[#D9658B]" />
+            <h3 className="text-lg sm:text-xl font-serif font-bold text-[#3D1E28]">
+              All YouTube Wellness & Cycle Integrations
+            </h3>
+          </div>
+          <span className="text-xs bg-[#FFF0F3] text-[#D9658B] px-3 py-1 rounded-full font-bold">
+            {YOUTUBE_TUTORIALS_LIBRARY.length} Verified Videos
+          </span>
+        </div>
+        <p className="text-xs text-[#7E5265]">
+          Curated video masterclasses covering cramp relief yoga, menstrual cups, hormonal syncing, and gynecologist interviews.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+          {YOUTUBE_TUTORIALS_LIBRARY.map((item) => (
+            <div
+              key={item.id}
+              className="p-4 rounded-2xl bg-white/80 border border-[#F4D5DC] space-y-3 flex flex-col justify-between hover:shadow-md transition-shadow"
+            >
+              <div>
+                <div className="flex items-center justify-between text-[11px] text-[#7E5265]">
+                  <span className="capitalize font-bold text-[#D9658B] bg-[#FFF0F3] px-2 py-0.5 rounded-full">
+                    {item.category.replace('-', ' ')}
+                  </span>
+                  <span>{item.duration}</span>
+                </div>
+                <h4 className="text-xs sm:text-sm font-serif font-bold text-[#3D1E28] mt-2 line-clamp-2">
+                  {item.title}
+                </h4>
+                <div className="text-[11px] text-[#7E5265] mt-1">
+                  Channel: {item.channel}
+                </div>
+                <p className="text-[11px] text-[#7E5265] line-clamp-2 mt-1">
+                  {item.description}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-[#FCECEF]">
+                <button
+                  onClick={() => setActiveVideoModal(item)}
+                  className="flex items-center gap-1.5 text-xs font-bold text-[#D9658B] hover:text-[#C54E74]"
+                >
+                  <Play className="w-3.5 h-3.5" />
+                  <span>Watch Video</span>
+                </button>
+                <a
+                  href={`https://www.youtube.com/watch?v=${item.youtubeId}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] text-[#7E5265] hover:text-[#3D1E28] flex items-center gap-1"
+                >
+                  <span>YouTube</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Interactive Video Modal */}
+      {activeVideoModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="glass-card bg-white rounded-3xl p-6 max-w-2xl w-full border border-[#F4D5DC] shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-[#FCECEF]">
+              <div className="flex items-center gap-2">
+                <Video className="w-4 h-4 text-[#D9658B]" />
+                <h4 className="text-sm font-serif font-bold text-[#3D1E28] truncate max-w-md">
+                  {activeVideoModal.title}
+                </h4>
+              </div>
+              <button
+                onClick={() => setActiveVideoModal(null)}
+                className="text-[#7E5265] hover:text-[#3D1E28] p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-black shadow-inner">
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${activeVideoModal.youtubeId}?autoplay=1`}
+                title={activeVideoModal.title}
+                className="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-[#7E5265]">
+              <span>Channel: {activeVideoModal.channel}</span>
+              <a
+                href={`https://www.youtube.com/watch?v=${activeVideoModal.youtubeId}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 font-semibold text-[#D9658B] hover:underline"
+              >
+                <span>Open in full YouTube</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

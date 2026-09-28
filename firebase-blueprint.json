@@ -1,0 +1,104 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile in Sakhi Cycle",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "CycleSettings": {
+      "title": "CycleSettings",
+      "description": "Menstrual cycle length, duration, and rhythm preferences",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "lastPeriodDate": { "type": "string" },
+        "cycleLength": { "type": "number" },
+        "periodDuration": { "type": "number" },
+        "lutealLength": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "lastPeriodDate", "cycleLength", "periodDuration"]
+    },
+    "DailyLog": {
+      "title": "DailyLog",
+      "description": "Daily symptoms, flow, mood, sleep, and hydration logs",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "date": { "type": "string" },
+        "mood": { "type": "string" },
+        "energy": { "type": "number" },
+        "flow": { "type": "string" },
+        "symptoms": { "type": "array" },
+        "sleepHours": { "type": "number" },
+        "waterGlasses": { "type": "number" },
+        "notes": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "date"]
+    },
+    "PartnerPermissions": {
+      "title": "PartnerPermissions",
+      "description": "Granular sharing controls for Flo-style partner care",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "isLinked": { "type": "boolean" },
+        "partnerName": { "type": "string" },
+        "inviteCode": { "type": "string" },
+        "sharePhase": { "type": "boolean" },
+        "shareNextPeriod": { "type": "boolean" },
+        "sharePMSMood": { "type": "boolean" },
+        "shareDailyLogs": { "type": "boolean" },
+        "shareSymptoms": { "type": "boolean" },
+        "sharePrivateNotes": { "type": "boolean" }
+      },
+      "required": ["userId", "inviteCode"]
+    },
+    "ForumPost": {
+      "title": "ForumPost",
+      "description": "Anonymous community discussions with reactions and comments",
+      "type": "object",
+      "properties": {
+        "authorUid": { "type": "string" },
+        "authorPseudonym": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["authorUid", "title", "content", "category"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile document"
+    },
+    "/users/{userId}/cycleSettings/current": {
+      "schema": { "$ref": "#/entities/CycleSettings" },
+      "description": "Current cycle settings for user"
+    },
+    "/users/{userId}/dailyLogs/{date}": {
+      "schema": { "$ref": "#/entities/DailyLog" },
+      "description": "Daily cycle check-in for specific date"
+    },
+    "/users/{userId}/partnerPermissions/current": {
+      "schema": { "$ref": "#/entities/PartnerPermissions" },
+      "description": "Partner permissions for user"
+    },
+    "/forumPosts/{postId}": {
+      "schema": { "$ref": "#/entities/ForumPost" },
+      "description": "Community forum discussions"
+    }
+  }
+}

@@ -8,6 +8,16 @@ import {
   BuddyProfile,
 } from '../types';
 import { formatDateToISO } from '../utils/cycleCalculations';
+import { auth, db } from '../lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import {
+  collection,
+  doc,
+  setDoc,
+  getDocs,
+  getDoc,
+  deleteDoc,
+} from 'firebase/firestore';
 
 interface AppContextType {
   language: Language;
@@ -59,9 +69,9 @@ const DEFAULT_PARTNER_PERMISSIONS: PartnerPermissions = {
   sharePhase: true,
   shareNextPeriod: true,
   sharePMSMood: true,
-  shareDailyLogs: false, // Strictly false by default
-  shareSymptoms: false,  // Strictly false by default
-  sharePrivateNotes: false, // Strictly false by default
+  shareDailyLogs: false,
+  shareSymptoms: false,
+  sharePrivateNotes: false,
 };
 
 const DEFAULT_BUDDY_PROFILE: BuddyProfile = {
@@ -74,11 +84,9 @@ const DEFAULT_BUDDY_PROFILE: BuddyProfile = {
   connectedSince: '2026-09-15',
 };
 
-// Seed realistic sample daily logs for the current cycle to populate Insights meaningfully
 const getInitialLogs = (): Record<string, DailyLogEntry> => {
   const logs: Record<string, DailyLogEntry> = {};
   
-  // Day -10 (period day 1)
   const d1 = new Date(today);
   d1.setDate(today.getDate() - 10);
   const s1 = formatDateToISO(d1);
@@ -93,7 +101,6 @@ const getInitialLogs = (): Record<string, DailyLogEntry> => {
     notes: 'Drinking warm ginger tea. Taking things slowly today.',
   };
 
-  // Day -9 (period day 2)
   const d2 = new Date(today);
   d2.setDate(today.getDate() - 9);
   const s2 = formatDateToISO(d2);
@@ -108,7 +115,6 @@ const getInitialLogs = (): Record<string, DailyLogEntry> => {
     notes: 'Heating pad is helping deeply. Rested in the afternoon.',
   };
 
-  // Day -8 (period day 3)
   const d3 = new Date(today);
   d3.setDate(today.getDate() - 8);
   const s3 = formatDateToISO(d3);
@@ -123,7 +129,6 @@ const getInitialLogs = (): Record<string, DailyLogEntry> => {
     notes: 'Feeling a bit more energy returning.',
   };
 
-  // Day -3 (follicular phase)
   const d4 = new Date(today);
   d4.setDate(today.getDate() - 3);
   const s4 = formatDateToISO(d4);
@@ -138,7 +143,6 @@ const getInitialLogs = (): Record<string, DailyLogEntry> => {
     notes: 'Went for a peaceful sunrise garden walk.',
   };
 
-  // Day -1 (yesterday)
   const d5 = new Date(today);
   d5.setDate(today.getDate() - 1);
   const s5 = formatDateToISO(d5);
@@ -244,7 +248,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : DEFAULT_BUDDY_PROFILE;
   });
 
-  // Local storage synchronization
+  // Real-time Firestore synchronization when user is signed in
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (!currentUser) return;
+      try {
+        // Fetch cycleSettings from Firestore
+        const settingsDoc = await getDoc(doc(db, 'users', currentUser.uid, 'cycleSettings', 'current'));
+        if (settingsDoc.exists()) {
+          setCycleSettings(settingsDoc.data() as CycleSettings);
+        }
+
+        // Fetch partnerPermissions from Firestore
+        const permDoc = await getDoc(doc(db, 'users', currentUser.uid, 'partnerPermissions', 'current'));
+        if (permDoc.exists()) {
+          setPartnerPermissions(permDoc.data() as PartnerPermissions);
+        }
+
+        // Fetch dailyLogs from Firestore
+        const logsSnapshot = await getDocs(collection(db, 'users', currentUser.uid, 'dailyLogs'));
+        if (!logsSnapshot.empty) {
+          const cloudLogs: Record<string, DailyLogEntry> = {};
+          logsSnapshot.forEach((d) => {
+            cloudLogs[d.id] = d.data() as DailyLogEntry;
+          });
+          setDailyLogs((prev) => ({ ...prev, ...cloudLogs }));
+        }
+      } catch (err) {
+        console.warn('Firestore initial load error:', err);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Local storage synchronization as backup
   useEffect(() => {
     localStorage.setItem('sakhi_lang', language);
   }, [language]);
@@ -273,41 +311,99 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLanguageState(lang);
   };
 
-  const updateCycleSettings = (settings: Partial<CycleSettings>) => {
-    setCycleSettings((prev) => ({ ...prev, ...settings }));
+  const updateCycleSettings = async (settings: Partial<CycleSettings>) => {
+    const updated = { ...cycleSettings, ...settings };
+    setCycleSettings(updated);
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'users', auth.currentUser.uid, 'cycleSettings', 'current'), {
+          ...updated,
+          userId: auth.currentUser.uid,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      } catch (e) {
+        console.warn('Firestore save cycleSettings error:', e);
+      }
+    }
   };
 
-  const saveDailyLog = (entry: DailyLogEntry) => {
+  const saveDailyLog = async (entry: DailyLogEntry) => {
+    const updatedEntry = { ...entry, updatedAt: new Date().toISOString() };
     setDailyLogs((prev) => ({
       ...prev,
-      [entry.date]: { ...entry, updatedAt: new Date().toISOString() },
+      [entry.date]: updatedEntry,
     }));
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'users', auth.currentUser.uid, 'dailyLogs', entry.date), {
+          ...updatedEntry,
+          userId: auth.currentUser.uid,
+        }, { merge: true });
+      } catch (e) {
+        console.warn('Firestore save dailyLog error:', e);
+      }
+    }
   };
 
-  const deleteDailyLog = (date: string) => {
+  const deleteDailyLog = async (date: string) => {
     setDailyLogs((prev) => {
       const copy = { ...prev };
       delete copy[date];
       return copy;
     });
+
+    if (auth.currentUser) {
+      try {
+        await deleteDoc(doc(db, 'users', auth.currentUser.uid, 'dailyLogs', date));
+      } catch (e) {
+        console.warn('Firestore delete dailyLog error:', e);
+      }
+    }
   };
 
   const getLogForDate = (date: string) => dailyLogs[date];
 
-  const updatePartnerPermissions = (updates: Partial<PartnerPermissions>) => {
-    setPartnerPermissions((prev) => ({ ...prev, ...updates }));
+  const updatePartnerPermissions = async (updates: Partial<PartnerPermissions>) => {
+    const updated = { ...partnerPermissions, ...updates };
+    setPartnerPermissions(updated);
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'users', auth.currentUser.uid, 'partnerPermissions', 'current'), {
+          ...updated,
+          userId: auth.currentUser.uid,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      } catch (e) {
+        console.warn('Firestore save partnerPermissions error:', e);
+      }
+    }
   };
 
-  const disconnectPartner = () => {
-    setPartnerPermissions((prev) => ({
-      ...prev,
+  const disconnectPartner = async () => {
+    const updated = {
+      ...partnerPermissions,
       isLinked: false,
       partnerName: '',
       inviteCode: `SAKHI-CARE-${Math.floor(1000 + Math.random() * 9000)}`,
-    }));
+    };
+    setPartnerPermissions(updated);
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'users', auth.currentUser.uid, 'partnerPermissions', 'current'), {
+          ...updated,
+          userId: auth.currentUser.uid,
+        }, { merge: true });
+      } catch (e) {
+        console.warn('Firestore disconnect partner error:', e);
+      }
+    }
   };
 
-  const addForumPost = (title: string, content: string, category: ForumPost['category']) => {
+  const addForumPost = async (title: string, content: string, category: ForumPost['category']) => {
     const newPost: ForumPost = {
       id: `post-${Date.now()}`,
       authorPseudonym: `RosePetal_${Math.floor(10 + Math.random() * 90)}`,
@@ -321,6 +417,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       comments: [],
     };
     setForumPosts((prev) => [newPost, ...prev]);
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'forumPosts', newPost.id), {
+          ...newPost,
+          authorUid: auth.currentUser.uid,
+        });
+      } catch (e) {
+        console.warn('Firestore save forum post error:', e);
+      }
+    }
   };
 
   const addForumComment = (postId: string, text: string) => {

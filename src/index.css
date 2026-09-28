@@ -3,7 +3,7 @@
 @theme {
   --font-serif: 'Cormorant Garamond', Georgia, serif;
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --color-sakhi-bg: #FFF8F8;
+  --color-sakhi-bg: #FFF5F7;
   --color-sakhi-surface: #FFFFFF;
   --color-sakhi-blush: #FCECEF;
   --color-sakhi-rose: #F4A6B8;
@@ -15,9 +15,39 @@
 @layer base {
   body {
     font-family: var(--font-sans);
-    background-color: #FFF8F8;
+    background-color: #FFF5F7;
     color: #3D1E28;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(254, 226, 236, 0.7) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(252, 231, 243, 0.7) 0px, transparent 50%),
+      radial-gradient(at 50% 50%, rgba(255, 245, 247, 0.9) 0px, transparent 60%),
+      radial-gradient(at 0% 100%, rgba(255, 230, 238, 0.6) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(253, 242, 248, 0.8) 0px, transparent 50%);
+    background-attachment: fixed;
+    background-size: cover;
   }
+}
+
+/* Glassy and Glowy Surface Styles */
+.glass-card {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 10px 35px -5px rgba(217, 101, 139, 0.08), 0 0 20px 0 rgba(244, 166, 184, 0.12);
+}
+
+.glass-glow {
+  box-shadow: 0 0 25px -3px rgba(217, 101, 139, 0.22), 0 8px 24px -4px rgba(217, 101, 139, 0.12);
+}
+
+/* Ambient Cloud Effect Layers */
+.cloud-glow-1 {
+  background: radial-gradient(circle, rgba(244, 166, 184, 0.25) 0%, rgba(255, 255, 255, 0) 70%);
+}
+
+.cloud-glow-2 {
+  background: radial-gradient(circle, rgba(226, 85, 116, 0.18) 0%, rgba(255, 255, 255, 0) 70%);
 }
 
 /* Custom scrollbar for soothing aesthetic */
@@ -26,7 +56,7 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #FFF8F8;
+  background: rgba(255, 245, 247, 0.5);
 }
 ::-webkit-scrollbar-thumb {
   background: #F4A6B8;
