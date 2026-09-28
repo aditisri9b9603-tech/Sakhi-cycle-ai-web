@@ -152,6 +152,9 @@ export const DoctorsSection: React.FC = () => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState(false);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [dragOffset, setDragOffset] = useState<number>(0);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const [clinicForm, setClinicForm] = useState({
     name: '',
@@ -178,6 +181,26 @@ export const DoctorsSection: React.FC = () => {
     setTimeout(() => setIsAnimating(false), 300);
   };
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.touches[0].clientX);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (touchStartX === null) return;
+    setDragOffset(e.touches[0].clientX - touchStartX);
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX === null) return;
+    if (dragOffset < -50) {
+      sweepNext();
+    } else if (dragOffset > 50) {
+      sweepPrev();
+    }
+    setTouchStartX(null);
+    setDragOffset(0);
+  };
+
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSubmissionSuccess(true);
@@ -196,6 +219,14 @@ export const DoctorsSection: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="p-3 bg-[#F3FAF5] border border-[#BFE7D0] text-[#226947] rounded-2xl text-xs flex items-center justify-between">
+          <span>{toastMessage}</span>
+          <button onClick={() => setToastMessage(null)} className="text-xs font-bold text-[#226947]">✕</button>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="glass-card p-6 rounded-3xl space-y-2">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -207,7 +238,7 @@ export const DoctorsSection: React.FC = () => {
               </h2>
             </div>
             <p className="text-xs sm:text-sm text-[#7E5265] mt-1">
-              Sweep through certified, real-life gynaecologists audited against official Medical Council registries.
+              Sweep or swipe horizontally through certified, real-life gynaecologists audited against official Medical Council registries.
             </p>
           </div>
 
@@ -226,15 +257,23 @@ export const DoctorsSection: React.FC = () => {
       </div>
 
       {/* SWEEPABLE DOCTOR CARD STACK */}
-      <div className="relative max-w-2xl mx-auto">
+      <div
+        className="relative max-w-2xl mx-auto cursor-grab active:cursor-grabbing select-none"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
         {/* Background Card Preview Effect */}
         <div className="absolute -top-3 inset-x-4 h-full bg-white/40 rounded-3xl -z-10 transform scale-[0.97] blur-[1px]" />
         <div className="absolute -top-6 inset-x-8 h-full bg-white/20 rounded-3xl -z-20 transform scale-[0.94] blur-[2px]" />
 
         {/* Active Sweeping Card */}
         <div
-          className={`glass-card p-6 sm:p-8 rounded-3xl space-y-6 transition-all duration-300 transform ${
-            isAnimating ? 'opacity-80 scale-95 translate-x-2' : 'opacity-100 scale-100'
+          style={{
+            transform: dragOffset !== 0 ? `translateX(${dragOffset}px) rotate(${dragOffset * 0.04}deg)` : undefined,
+          }}
+          className={`glass-card p-6 sm:p-8 rounded-3xl space-y-6 transition-all duration-300 ${
+            isAnimating ? 'opacity-80 scale-95' : 'opacity-100 scale-100'
           }`}
         >
           {/* Top Credentials & Badge */}
@@ -335,10 +374,8 @@ export const DoctorsSection: React.FC = () => {
 
             <button
               onClick={() => {
-                setActiveSection('learn');
-                alert(
-                  `Pre-filling inquiry to ${currentDoctor.name} at ${currentDoctor.officialEmail}. You can send it directly through Gmail integration in Workspace.`
-                );
+                setToastMessage(`Inquiry pre-staged for ${currentDoctor.name} (${currentDoctor.officialEmail}). Opening Workspace...`);
+                setActiveSection('workspace');
               }}
               className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-[#F4D5DC] hover:border-[#D9658B] text-[#7E5265] hover:text-[#3D1E28] rounded-xl text-xs font-semibold transition-all"
             >
