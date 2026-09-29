@@ -58,6 +58,7 @@ export const Navigation: React.FC = () => {
     clearAuthError,
     activeProvider,
     signInWithGoogle,
+    signInWithGoogleAccount,
     signInAsGuest,
     signInWithEmail,
     registerWithEmail,
@@ -428,7 +429,31 @@ export const Navigation: React.FC = () => {
 
             {authMode === 'options' ? (
               <div className="space-y-2.5 pt-2">
-                {/* 1. Google Sign-In */}
+                {/* 1. Quick One-Click Sign In */}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const ok = await signInWithGoogleAccount('aditisri991177@gmail.com', 'Aditi');
+                    if (ok) setAuthModalOpen(false);
+                  }}
+                  disabled={isSigningIn}
+                  className="w-full flex items-center justify-between p-2.5 rounded-2xl bg-[#FFF0F3] hover:bg-[#FCECEF] border border-[#F4D5DC] hover:border-[#D9658B] text-left transition-all shadow-2xs group"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-[#D9658B] text-white flex items-center justify-center text-xs font-bold shadow-2xs">
+                      A
+                    </div>
+                    <div className="text-left">
+                      <div className="text-xs font-bold text-[#3D1E28] group-hover:text-[#D9658B]">Sign in as Aditi</div>
+                      <div className="text-[10px] text-[#7E5265]">aditisri991177@gmail.com</div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold text-[#D9658B] bg-white px-2 py-0.5 rounded-full border border-[#F4D5DC]">
+                    1-Click
+                  </span>
+                </button>
+
+                {/* 2. Google Sign-In */}
                 <button
                   onClick={handleGoogleClick}
                   disabled={isSigningIn}

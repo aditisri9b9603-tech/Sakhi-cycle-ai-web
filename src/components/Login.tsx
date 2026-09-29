@@ -62,7 +62,7 @@ export const Login: React.FC<LoginProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [localFeedback, setLocalFeedback] = useState<string | null>(null);
 
-  const [customGoogleEmail, setCustomGoogleEmail] = useState('aditiclearwitssih@gmail.com');
+  const [customGoogleEmail, setCustomGoogleEmail] = useState('aditisri991177@gmail.com');
   const [showCustomGoogleInput, setShowCustomGoogleInput] = useState(false);
 
   const handlePostAuthSuccess = () => {
@@ -76,13 +76,13 @@ export const Login: React.FC<LoginProps> = ({
     clearAuthError();
     clearAuthNotice();
     setLocalFeedback(null);
-    const ok = await signInWithGoogle();
+    const ok = await signInWithGoogle(customGoogleEmail || 'aditisri991177@gmail.com');
     if (ok) {
       handlePostAuthSuccess();
     }
   };
 
-  const handleDirectGoogleSignIn = async (emailToUse: string = 'aditiclearwitssih@gmail.com') => {
+  const handleDirectGoogleSignIn = async (emailToUse: string = 'aditisri991177@gmail.com') => {
     clearAuthError();
     clearAuthNotice();
     setLocalFeedback(null);
@@ -296,8 +296,32 @@ export const Login: React.FC<LoginProps> = ({
         </div>
       )}
 
-      {/* 1. Primary Google Sign-In Action */}
+      {/* 1. Primary Google Sign-In Actions */}
       <div className="space-y-3">
+        {/* Quick One-Click Sign In for Aditi */}
+        <button
+          type="button"
+          onClick={() => handleDirectGoogleSignIn('aditisri991177@gmail.com')}
+          disabled={isSigningIn}
+          className="w-full flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-[#FFF0F3] to-[#FCECEF] border border-[#F4D5DC] hover:border-[#D9658B] text-left transition-all hover:shadow-xs group"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-[#D9658B] text-white flex items-center justify-center text-xs font-bold shadow-xs">
+              A
+            </div>
+            <div>
+              <div className="text-xs font-bold text-[#3D1E28] group-hover:text-[#D9658B] transition-colors flex items-center gap-1.5">
+                <span>Sign in as Aditi</span>
+                <span className="text-[10px] px-2 py-0.2 rounded-full bg-[#EBF7EE] text-[#226947] font-semibold border border-[#BFE7D0]">
+                  One-Click
+                </span>
+              </div>
+              <div className="text-[11px] text-[#7E5265]">aditisri991177@gmail.com</div>
+            </div>
+          </div>
+          <ArrowRight className="w-4 h-4 text-[#D9658B] group-hover:translate-x-0.5 transition-transform" />
+        </button>
+
         <button
           type="button"
           onClick={handleGoogleSignIn}
@@ -326,14 +350,57 @@ export const Login: React.FC<LoginProps> = ({
               />
             </svg>
           )}
-          <span>Sign in with Google Email ID</span>
+          <span>Sign in with Google Popup</span>
         </button>
+
+        {/* Custom Google Email input toggle (ideal for Vercel if popup domain is unlisted) */}
+        {!showCustomGoogleInput ? (
+          <div className="text-center pt-0.5">
+            <button
+              type="button"
+              onClick={() => setShowCustomGoogleInput(true)}
+              className="text-[11px] text-[#7E5265] hover:text-[#D9658B] hover:underline"
+            >
+              Sign in with another Google Email directly →
+            </button>
+          </div>
+        ) : (
+          <div className="p-3 bg-[#FFF8F8] border border-[#F4D5DC] rounded-2xl space-y-2 animate-fadeIn text-left">
+            <div className="flex items-center justify-between text-[11px] font-semibold text-[#3D1E28]">
+              <span>Direct Google Account ID</span>
+              <button
+                type="button"
+                onClick={() => setShowCustomGoogleInput(false)}
+                className="text-[#7E5265] hover:text-[#3D1E28]"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={customGoogleEmail}
+                onChange={(e) => setCustomGoogleEmail(e.target.value)}
+                placeholder="you@gmail.com"
+                className="flex-1 px-3 py-2 text-xs rounded-xl border border-[#F4D5DC] bg-white focus:outline-none focus:ring-1 focus:ring-[#D9658B]"
+              />
+              <button
+                type="button"
+                onClick={() => handleDirectGoogleSignIn(customGoogleEmail)}
+                disabled={isSigningIn || !customGoogleEmail}
+                className="px-3 py-2 bg-[#D9658B] hover:bg-[#C54E74] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-60"
+              >
+                Sign In
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Divider */}
         <div className="relative flex items-center justify-center my-3">
           <div className="border-t border-[#FCECEF] w-full" />
           <span className="bg-white px-3 text-[11px] font-medium text-[#7E5265] uppercase tracking-wider whitespace-nowrap">
-            or with email & password
+            or standard email & password
           </span>
           <div className="border-t border-[#FCECEF] w-full" />
         </div>
