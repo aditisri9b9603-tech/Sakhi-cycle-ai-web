@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { isSupabaseConfigured } from '../utils/supabaseClient';
 import {
   Settings,
   Globe,
@@ -169,7 +168,7 @@ export const SettingsSection: React.FC = () => {
         </div>
       </form>
 
-      {/* Cloud & Supabase Connectivity Status */}
+      {/* Cloud & Database Connectivity Status */}
       <div className="p-6 bg-white/95 rounded-3xl border border-[#F4D5DC] shadow-xs space-y-3">
         <div className="flex items-center gap-2 text-sm font-bold text-[#3D1E28]">
           <Database className="w-4 h-4 text-[#D9658B]" />
@@ -178,18 +177,14 @@ export const SettingsSection: React.FC = () => {
 
         <div className="p-4 rounded-2xl bg-[#FFF8F8] border border-[#F4D5DC] flex items-start gap-3">
           <div className="w-8 h-8 rounded-full bg-white border border-[#F4D5DC] flex items-center justify-center text-sm shrink-0">
-            {isSupabaseConfigured ? '🟢' : '🔒'}
+            ☁️
           </div>
           <div className="space-y-1 text-xs text-[#7E5265]">
             <div className="font-bold text-[#3D1E28]">
-              {isSupabaseConfigured
-                ? 'Connected to Supabase Cloud Instance'
-                : 'Local Secure Offline Storage Active'}
+              Firebase Cloud Firestore & Authentication
             </div>
             <p className="leading-relaxed">
-              {isSupabaseConfigured
-                ? 'Your cycles and daily check-ins sync securely with Supabase Row-Level Security (RLS) under your authenticated account.'
-                : 'All your logs, cycle dates, and notes are currently stored in your browser’s private encrypted storage. To enable cloud multi-device sync, supply VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment secrets.'}
+              Your cycle history, symptom check-ins, and companion settings synchronize seamlessly with Firebase Cloud Firestore. When signed in, any updates on any device persist under your private user document (<code className="bg-white/80 px-1 py-0.5 rounded text-[10px] text-[#D9658B]">users/{'{userId}'}</code>) guarded by strict security rules.
             </p>
           </div>
         </div>

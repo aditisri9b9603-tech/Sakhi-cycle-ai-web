@@ -1,215 +1,339 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import {
-  User,
-  signInWithPopup,
-  signOut as firebaseSignOut,
-  onAuthStateChanged,
-  GoogleAuthProvider,
-  signInAnonymously,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-} from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import {
-  auth,
-  db,
-  googleAuthProvider,
-  workspaceGoogleAuthProvider,
-  testFirestoreConnection,
-} from '../lib/firebase';
+import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
+import { AuthUser } from '../types';
+import { auth as firebaseAuth } from '../lib/firebase';
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   loading: boolean;
   isSigningIn: boolean;
   accessToken: string | null;
   authNotice: string | null;
+  authError: string | null;
   clearAuthNotice: () => void;
   signInWithGoogle: () => Promise<boolean>;
-  signInWithWorkspace: () => Promise<boolean>;
-  signInAsGuest: () => Promise<boolean>;
+  signInWithMagicLink: (email: string) => Promise<boolean>;
   signInWithEmail: (email: string, pass: string) => Promise<boolean>;
+  signInAsGuest: () => Promise<boolean>;
   logout: () => Promise<void>;
-  hasWorkspaceAuth: boolean;
+  isSupabaseConnected: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-let inMemoryAccessToken: string | null = null;
+const GUEST_STORAGE_KEY = 'sakhi_guest_user';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
+  // Initialize Supabase Auth session listener
   useEffect(() => {
-    testFirestoreConnection();
+    let mounted = true;
 
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        // Sync or create user document in Firestore
+    async function initAuth() {
+      if (isSupabaseConfigured && supabase) {
         try {
-          const userRef = doc(db, 'users', currentUser.uid);
-          const snap = await getDoc(userRef);
-          if (!snap.exists()) {
-            await setDoc(
-              userRef,
-              {
-                uid: currentUser.uid,
-                email: currentUser.email || 'guest@sakhicycle.app',
-                displayName: currentUser.displayName || (currentUser.isAnonymous ? 'Sakhi Guest' : 'Sakhi Soul'),
-                photoURL: currentUser.photoURL || '',
-                createdAt: new Date().toISOString(),
-              },
-              { merge: true }
-            );
+          const { data: { session }, error } = await supabase.auth.getSession();
+          if (error) {
+            console.warn('Supabase getSession error:', error.message);
+          }
+          if (session?.user && mounted) {
+            const u = session.user;
+            setUser({
+              id: u.id,
+              email: u.email,
+              displayName:
+                u.user_metadata?.full_name ||
+                u.user_metadata?.name ||
+                (u.email ? u.email.split('@')[0] : 'Sakhi Soul'),
+              photoURL: u.user_metadata?.avatar_url || u.user_metadata?.picture || '',
+              isGuest: false,
+              provider: (u.app_metadata?.provider as any) || 'email',
+              createdAt: u.created_at,
+            });
+            setAccessToken(session.access_token);
+            setLoading(false);
+            return;
           }
         } catch (e) {
-          console.warn('Could not sync user profile to Firestore:', e);
+          console.warn('Error reading initial Supabase session:', e);
         }
-      } else {
-        inMemoryAccessToken = null;
-        setAccessToken(null);
-      }
-      setLoading(false);
-    });
 
-    return () => unsubscribe();
+        // Setup real-time auth subscription
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          async (event, session) => {
+            if (!mounted) return;
+            if (session?.user) {
+              const u = session.user;
+              setUser({
+                id: u.id,
+                email: u.email,
+                displayName:
+                  u.user_metadata?.full_name ||
+                  u.user_metadata?.name ||
+                  (u.email ? u.email.split('@')[0] : 'Sakhi Soul'),
+                photoURL: u.user_metadata?.avatar_url || u.user_metadata?.picture || '',
+                isGuest: false,
+                provider: (u.app_metadata?.provider as any) || 'email',
+                createdAt: u.created_at,
+              });
+              setAccessToken(session.access_token);
+              localStorage.removeItem(GUEST_STORAGE_KEY);
+            } else if (event === 'SIGNED_OUT') {
+              setUser(null);
+              setAccessToken(null);
+            }
+            setLoading(false);
+          }
+        );
+
+        // Check for guest or preserved local user
+        const guestData = localStorage.getItem(GUEST_STORAGE_KEY);
+        if (guestData && !user && mounted) {
+          try {
+            setUser(JSON.parse(guestData));
+          } catch {
+            localStorage.removeItem(GUEST_STORAGE_KEY);
+          }
+        }
+
+        if (mounted) setLoading(false);
+        return () => subscription.unsubscribe();
+      } else {
+        // Fallback: Check local guest session or preserved Firebase user if offline
+        const guestData = localStorage.getItem(GUEST_STORAGE_KEY);
+        if (guestData && mounted) {
+          try {
+            setUser(JSON.parse(guestData));
+          } catch {
+            localStorage.removeItem(GUEST_STORAGE_KEY);
+          }
+        } else if (firebaseAuth?.currentUser && mounted) {
+          const fc = firebaseAuth.currentUser;
+          setUser({
+            id: fc.uid,
+            email: fc.email || 'guest@sakhicycle.app',
+            displayName: fc.displayName || 'Sakhi Soul',
+            photoURL: fc.photoURL || '',
+            isGuest: fc.isAnonymous,
+            provider: 'guest',
+          });
+        }
+        if (mounted) setLoading(false);
+      }
+    }
+
+    initAuth();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const clearAuthNotice = () => setAuthNotice(null);
+  const clearAuthNotice = () => {
+    setAuthNotice(null);
+    setAuthError(null);
+  };
 
-  // Standard Google Sign-In (Safe standard scopes, no Google App Verification barrier)
+  // Sign In with Google via Supabase OAuth
   const signInWithGoogle = async (): Promise<boolean> => {
     setIsSigningIn(true);
     setAuthNotice(null);
-    try {
-      const result = await signInWithPopup(auth, googleAuthProvider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential?.accessToken) {
-        inMemoryAccessToken = credential.accessToken;
-        setAccessToken(credential.accessToken);
-      }
-      setAuthNotice('Signed in successfully! Your cycle and logs are now synced.');
-      return true;
-    } catch (error: any) {
-      const errorCode = error?.code || '';
-      const errorMessage = error?.message || '';
+    setAuthError(null);
 
-      if (
-        errorCode === 'auth/popup-closed-by-user' ||
-        errorCode === 'auth/cancelled-popup-request' ||
-        errorMessage.includes('popup-closed-by-user') ||
-        errorMessage.includes('cancelled-popup-request')
-      ) {
-        console.info('Google Sign-In popup closed by user.');
-        setAuthNotice('Sign-in popup closed. You can try again or use Instant Guest Mode.');
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const redirectUrl = window.location.origin;
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: redirectUrl,
+            queryParams: {
+              access_type: 'offline',
+              prompt: 'consent',
+            },
+          },
+        });
+
+        if (error) {
+          console.warn('Supabase Google OAuth error:', error.message);
+          setAuthError(error.message);
+          return false;
+        }
+
+        setAuthNotice('Redirecting to Google securely...');
+        return true;
+      } catch (err: any) {
+        console.error('Google Sign-In caught error:', err);
+        setAuthError(err.message || 'Could not initiate Google sign-in.');
         return false;
+      } finally {
+        setIsSigningIn(false);
       }
-
-      if (errorCode === 'auth/popup-blocked') {
-        console.warn('Google Sign-In popup blocked by browser.');
-        setAuthNotice('Popups were blocked by your browser. Please allow popups or use Guest Mode.');
-        return false;
-      }
-
-      console.warn('Google Sign-In notice:', errorMessage);
-      setAuthNotice(errorMessage || 'Could not complete sign-in. You can also use Guest Mode.');
-      return false;
-    } finally {
-      setIsSigningIn(false);
+    } else {
+      setAuthNotice('Supabase credentials missing in environment. Using instant guest access.');
+      return signInAsGuest();
     }
   };
 
-  // Dedicated Workspace Google Sign-In (Includes Gmail, Chat, Forms scopes)
-  const signInWithWorkspace = async (): Promise<boolean> => {
+  // Sign In with Magic Link via Supabase
+  const signInWithMagicLink = async (email: string): Promise<boolean> => {
+    if (!email || !email.includes('@')) {
+      setAuthError('Please enter a valid email address.');
+      return false;
+    }
     setIsSigningIn(true);
     setAuthNotice(null);
-    try {
-      const result = await signInWithPopup(auth, workspaceGoogleAuthProvider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential?.accessToken) {
-        inMemoryAccessToken = credential.accessToken;
-        setAccessToken(credential.accessToken);
-      }
-      setAuthNotice('Connected to Google Workspace!');
-      return true;
-    } catch (error: any) {
-      const errorCode = error?.code || '';
-      const errorMessage = error?.message || '';
+    setAuthError(null);
 
-      if (
-        errorCode === 'auth/popup-closed-by-user' ||
-        errorCode === 'auth/cancelled-popup-request'
-      ) {
-        setAuthNotice('Workspace authorization closed.');
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            emailRedirectTo: window.location.origin,
+          },
+        });
+
+        if (error) {
+          setAuthError(error.message);
+          return false;
+        }
+
+        setAuthNotice(`✨ Magic sign-in link sent to ${email}! Check your inbox to sign in.`);
+        return true;
+      } catch (err: any) {
+        setAuthError(err.message || 'Failed to send magic link.');
         return false;
+      } finally {
+        setIsSigningIn(false);
       }
-
-      setAuthNotice(
-        errorMessage.includes('access_denied')
-          ? 'Google Workspace requires developer tester approval for restricted Gmail scopes in test mode.'
-          : errorMessage
-      );
-      return false;
-    } finally {
+    } else {
+      setAuthError('Supabase is not configured to send magic links.');
       setIsSigningIn(false);
+      return false;
     }
   };
 
-  // Instant Guest Mode with Cloud Firestore storage
+  // Sign In or Sign Up with Email & Password via Supabase
+  const signInWithEmail = async (email: string, pass: string): Promise<boolean> => {
+    if (!email || !pass) {
+      setAuthError('Please provide both email and password.');
+      return false;
+    }
+    if (pass.length < 6) {
+      setAuthError('Password must be at least 6 characters.');
+      return false;
+    }
+
+    setIsSigningIn(true);
+    setAuthNotice(null);
+    setAuthError(null);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        // Try signing in
+        const { data, error: signInErr } = await supabase.auth.signInWithPassword({
+          email,
+          password: pass,
+        });
+
+        if (signInErr) {
+          // If invalid credentials or user not found, attempt sign up
+          if (
+            signInErr.message.includes('Invalid login credentials') ||
+            signInErr.message.includes('User not found')
+          ) {
+            const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+              email,
+              password: pass,
+              options: {
+                data: {
+                  full_name: email.split('@')[0],
+                },
+              },
+            });
+
+            if (signUpErr) {
+              setAuthError(signUpErr.message);
+              return false;
+            }
+
+            if (signUpData.session) {
+              setAuthNotice('Welcome! Your new Sakhi Cycle account is created and signed in.');
+              return true;
+            } else {
+              setAuthNotice(`Account created! Please check ${email} for confirmation if email verification is enabled.`);
+              return true;
+            }
+          } else {
+            setAuthError(signInErr.message);
+            return false;
+          }
+        }
+
+        if (data.session) {
+          setAuthNotice('Signed in successfully! Your cycle and logs are synced to Supabase.');
+          return true;
+        }
+        return false;
+      } catch (err: any) {
+        setAuthError(err.message || 'Email authentication failed.');
+        return false;
+      } finally {
+        setIsSigningIn(false);
+      }
+    } else {
+      setAuthError('Supabase backend not detected. Using instant Guest mode.');
+      return signInAsGuest();
+    }
+  };
+
+  // Instant Guest Mode with safe local persistence and Supabase sync readiness
   const signInAsGuest = async (): Promise<boolean> => {
     setIsSigningIn(true);
     setAuthNotice(null);
+    setAuthError(null);
     try {
-      await signInAnonymously(auth);
-      setAuthNotice('Signed in as Guest! Your logs are saved in cloud storage.');
+      const guestUser: AuthUser = {
+        id: `guest_${Date.now()}`,
+        email: 'guest@sakhicycle.app',
+        displayName: 'Sakhi Guest',
+        photoURL: '',
+        isGuest: true,
+        provider: 'guest',
+        createdAt: new Date().toISOString(),
+      };
+      localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(guestUser));
+      setUser(guestUser);
+      setAuthNotice('Active in Instant Guest Mode! All entries are safely saved on this device.');
       return true;
-    } catch (error: any) {
-      console.warn('Guest sign-in notice:', error?.message);
-      setAuthNotice('Guest sign-in is currently unavailable in this environment.');
+    } catch (err: any) {
+      setAuthError('Could not initialize guest session.');
       return false;
     } finally {
       setIsSigningIn(false);
     }
   };
 
-  // Email / Password Authentication
-  const signInWithEmail = async (email: string, pass: string): Promise<boolean> => {
-    setIsSigningIn(true);
-    setAuthNotice(null);
-    try {
-      try {
-        await signInWithEmailAndPassword(auth, email, pass);
-      } catch (err: any) {
-        if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
-          await createUserWithEmailAndPassword(auth, email, pass);
-        } else {
-          throw err;
-        }
-      }
-      setAuthNotice('Signed in with email!');
-      return true;
-    } catch (error: any) {
-      setAuthNotice(error?.message || 'Could not sign in with email.');
-      return false;
-    } finally {
-      setIsSigningIn(false);
-    }
-  };
-
+  // Sign out
   const logout = async () => {
     try {
-      await firebaseSignOut(auth);
-      inMemoryAccessToken = null;
-      setAccessToken(null);
+      if (isSupabaseConfigured && supabase) {
+        await supabase.auth.signOut();
+      }
+      localStorage.removeItem(GUEST_STORAGE_KEY);
       setUser(null);
-      setAuthNotice('Signed out. Your local entries remain safely on this device.');
+      setAccessToken(null);
+      setAuthNotice('Signed out. Your entries remain safely on this device.');
     } catch (err: any) {
       console.warn('Sign-out error:', err);
+      setUser(null);
     }
   };
 
@@ -221,13 +345,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isSigningIn,
         accessToken,
         authNotice,
+        authError,
         clearAuthNotice,
         signInWithGoogle,
-        signInWithWorkspace,
-        signInAsGuest,
+        signInWithMagicLink,
         signInWithEmail,
+        signInAsGuest,
         logout,
-        hasWorkspaceAuth: Boolean(accessToken),
+        isSupabaseConnected: isSupabaseConfigured,
       }}
     >
       {children}
@@ -240,5 +365,3 @@ export const useAuth = () => {
   if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
-
-export const getCachedAccessToken = () => inMemoryAccessToken;

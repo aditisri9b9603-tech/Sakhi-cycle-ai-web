@@ -343,7 +343,10 @@ export const Navigation: React.FC = () => {
                 🌸
               </div>
               <button
-                onClick={() => setAuthModalOpen(false)}
+                onClick={() => {
+                  setAuthModalOpen(false);
+                  clearAuthNotice();
+                }}
                 className="absolute top-0 right-0 p-1.5 text-[#7E5265] hover:text-[#3D1E28] rounded-full hover:bg-[#FFF0F3]"
               >
                 <X className="w-4 h-4" />
@@ -358,6 +361,12 @@ export const Navigation: React.FC = () => {
                 Sync your daily logs, symptom trends, and doctor inquiries safely to the cloud.
               </p>
             </div>
+
+            {authNotice && (
+              <div className="p-2.5 rounded-xl bg-[#FFF0F3] border border-[#F4D5DC] text-[11px] text-[#A8385D] text-left leading-relaxed">
+                {authNotice}
+              </div>
+            )}
 
             {authMode === 'options' ? (
               <div className="space-y-3 pt-2">

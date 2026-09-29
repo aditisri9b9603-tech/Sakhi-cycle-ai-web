@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   Language,
   CycleSettings,
@@ -6,18 +6,19 @@ import {
   PartnerPermissions,
   ForumPost,
   BuddyProfile,
+  CyclePhase,
 } from '../types';
-import { formatDateToISO } from '../utils/cycleCalculations';
-import { auth, db } from '../lib/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import {
-  collection,
-  doc,
-  setDoc,
-  getDocs,
-  getDoc,
-  deleteDoc,
-} from 'firebase/firestore';
+import { formatDateToISO, calculateCycleStatus } from '../utils/cycleCalculations';
+import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
+import { useAuth } from './AuthContext';
+
+export interface DailyReflectionPrompt {
+  phase: CyclePhase;
+  phaseTitle: string;
+  question: string;
+  date: string;
+  suggestion: string;
+}
 
 interface AppContextType {
   language: Language;
@@ -27,16 +28,16 @@ interface AppContextType {
   activeSubSection: string;
   setActiveSubSection: (sub: string) => void;
   cycleSettings: CycleSettings;
-  updateCycleSettings: (settings: Partial<CycleSettings>) => void;
+  updateCycleSettings: (settings: Partial<CycleSettings>) => Promise<boolean>;
   dailyLogs: Record<string, DailyLogEntry>; // keyed by YYYY-MM-DD
-  saveDailyLog: (entry: DailyLogEntry) => void;
-  deleteDailyLog: (date: string) => void;
+  saveDailyLog: (entry: DailyLogEntry) => Promise<boolean>;
+  deleteDailyLog: (date: string) => Promise<boolean>;
   getLogForDate: (date: string) => DailyLogEntry | undefined;
   partnerPermissions: PartnerPermissions;
-  updatePartnerPermissions: (updates: Partial<PartnerPermissions>) => void;
+  updatePartnerPermissions: (updates: Partial<PartnerPermissions>) => Promise<boolean>;
   disconnectPartner: () => void;
   forumPosts: ForumPost[];
-  addForumPost: (title: string, content: string, category: ForumPost['category']) => void;
+  addForumPost: (title: string, content: string, category: ForumPost['category']) => Promise<boolean>;
   addForumComment: (postId: string, text: string) => void;
   toggleReaction: (postId: string, reactionType: 'heart' | 'helpful' | 'hug') => void;
   reportPost: (postId: string) => void;
@@ -48,12 +49,14 @@ interface AppContextType {
   setSelectedCalendarDate: (date: string) => void;
   syncStatus: 'idle' | 'syncing' | 'synced' | 'local_only' | 'error';
   lastSyncedTime: string | null;
+  syncErrorMsg: string | null;
   syncAllLogsToCloud: () => Promise<boolean>;
+  dailyReflectionPrompt: DailyReflectionPrompt | null;
+  dismissReflectionPrompt: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Helper for initial default date (e.g., 8 days ago)
 const today = new Date();
 const defaultStartDate = new Date(today);
 defaultStartDate.setDate(today.getDate() - 10);
@@ -89,7 +92,7 @@ const DEFAULT_BUDDY_PROFILE: BuddyProfile = {
 
 const getInitialLogs = (): Record<string, DailyLogEntry> => {
   const logs: Record<string, DailyLogEntry> = {};
-  
+
   const d1 = new Date(today);
   d1.setDate(today.getDate() - 10);
   const s1 = formatDateToISO(d1);
@@ -102,6 +105,7 @@ const getInitialLogs = (): Record<string, DailyLogEntry> => {
     sleepHours: 7.5,
     waterGlasses: 7,
     notes: 'Drinking warm ginger tea. Taking things slowly today.',
+    syncedToCloud: false,
   };
 
   const d2 = new Date(today);
@@ -116,6 +120,7 @@ const getInitialLogs = (): Record<string, DailyLogEntry> => {
     sleepHours: 8,
     waterGlasses: 8,
     notes: 'Heating pad is helping deeply. Rested in the afternoon.',
+    syncedToCloud: false,
   };
 
   const d3 = new Date(today);
@@ -130,6 +135,7 @@ const getInitialLogs = (): Record<string, DailyLogEntry> => {
     sleepHours: 7,
     waterGlasses: 8,
     notes: 'Feeling a bit more energy returning.',
+    syncedToCloud: false,
   };
 
   const d4 = new Date(today);
@@ -144,6 +150,7 @@ const getInitialLogs = (): Record<string, DailyLogEntry> => {
     sleepHours: 8,
     waterGlasses: 9,
     notes: 'Went for a peaceful sunrise garden walk.',
+    syncedToCloud: false,
   };
 
   const d5 = new Date(today);
@@ -158,6 +165,7 @@ const getInitialLogs = (): Record<string, DailyLogEntry> => {
     sleepHours: 8.5,
     waterGlasses: 10,
     notes: 'Creative brainstorming flowed easily.',
+    syncedToCloud: false,
   };
 
   return logs;
@@ -169,7 +177,8 @@ const INITIAL_FORUM_POSTS: ForumPost[] = [
     authorPseudonym: 'LavenderMoon_42',
     authorAvatar: '🌸',
     title: 'Switching to menstrual cups: what helped me finally feel comfortable',
-    content: 'For months I was intimidated by menstrual cups, but trying the "punch-down fold" in the shower made all the difference! Remember to boil it in clean water between cycles.',
+    content:
+      'For months I was intimidated by menstrual cups, but trying the "punch-down fold" in the shower made all the difference! Remember to boil it in clean water between cycles.',
     category: 'wellness',
     createdAt: '2026-09-26',
     reactions: { heart: 28, helpful: 45, hug: 12 },
@@ -188,7 +197,8 @@ const INITIAL_FORUM_POSTS: ForumPost[] = [
     authorPseudonym: 'ChaiAndCare_77',
     authorAvatar: '☕',
     title: 'My favorite seed cycling recipe for luteal phase balance',
-    content: 'During the luteal phase (after ovulation), I add 1 tbsp ground sunflower seeds and 1 tbsp sesame seeds to my morning warm oats. It has helped my luteal mood swings feel so much softer.',
+    content:
+      'During the luteal phase (after ovulation), I add 1 tbsp ground sunflower seeds and 1 tbsp sesame seeds to my morning warm oats. It has helped my luteal mood swings feel so much softer.',
     category: 'nutrition',
     createdAt: '2026-09-25',
     reactions: { heart: 34, helpful: 52, hug: 18 },
@@ -207,7 +217,8 @@ const INITIAL_FORUM_POSTS: ForumPost[] = [
     authorPseudonym: 'GracefulPebble_93',
     authorAvatar: '🌿',
     title: 'How Flo-style partner sharing helped my spouse understand my low-energy days',
-    content: 'We set up partner view so my husband only gets a gentle notification when I enter my luteal and menstrual phases. He started bringing me hot chamomile tea without me even having to ask!',
+    content:
+      'We set up partner view so my husband only gets a gentle notification when I enter my luteal and menstrual phases. He started bringing me hot chamomile tea without me even having to ask!',
     category: 'wellness',
     createdAt: '2026-09-24',
     reactions: { heart: 49, helpful: 38, hug: 29 },
@@ -217,6 +228,8 @@ const INITIAL_FORUM_POSTS: ForumPost[] = [
 ];
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+
   const [language, setLanguageState] = useState<Language>(() => {
     return (localStorage.getItem('sakhi_lang') as Language) || 'en';
   });
@@ -253,116 +266,193 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'local_only' | 'error'>('idle');
   const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
+  const [syncErrorMsg, setSyncErrorMsg] = useState<string | null>(null);
 
-  // Sync all current logs to Firestore cloud
-  const syncAllLogsToCloud = async (): Promise<boolean> => {
-    if (!auth.currentUser) {
-      setSyncStatus('local_only');
-      return false;
-    }
-    setSyncStatus('syncing');
-    try {
-      const uid = auth.currentUser.uid;
-      // Sync cycle settings
-      await setDoc(
-        doc(db, 'users', uid, 'cycleSettings', 'current'),
-        {
-          ...cycleSettings,
-          userId: uid,
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
+  // Daily Reflection prompt triggered after logging symptoms
+  const [dailyReflectionPrompt, setDailyReflectionPrompt] = useState<DailyReflectionPrompt | null>(() => {
+    const saved = localStorage.getItem('sakhi_daily_reflection');
+    return saved ? JSON.parse(saved) : null;
+  });
 
-      // Sync all daily logs
-      const entries = Object.values(dailyLogs);
-      for (const entry of entries) {
-        await setDoc(
-          doc(db, 'users', uid, 'dailyLogs', entry.date),
-          {
-            ...entry,
-            userId: uid,
-            updatedAt: entry.updatedAt || new Date().toISOString(),
-          },
-          { merge: true }
-        );
-      }
-
-      setSyncStatus('synced');
-      setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-      return true;
-    } catch (err) {
-      console.warn('Sync all logs error:', err);
-      setSyncStatus('error');
-      return false;
-    }
+  const dismissReflectionPrompt = () => {
+    setDailyReflectionPrompt(null);
+    localStorage.removeItem('sakhi_daily_reflection');
   };
 
-  // Real-time Firestore synchronization when user signs in
+  // Helper to generate reflection questions based on current cycle phase
+  const generateReflectionForPhase = useCallback((phase: CyclePhase): DailyReflectionPrompt => {
+    switch (phase) {
+      case 'menstrual':
+        return {
+          phase: 'menstrual',
+          phaseTitle: 'Menstrual Phase (Rest & Cleansing)',
+          question:
+            'In this tender time of physical letting go, what expectation, pressure, or task can you give yourself permission to release today?',
+          date: formatDateToISO(new Date()),
+          suggestion: 'Sip warm herbal tea, rest with a heating pad, and speak kindly to yourself.',
+        };
+      case 'follicular':
+        return {
+          phase: 'follicular',
+          phaseTitle: 'Follicular Phase (Renewal & Rising Energy)',
+          question:
+            'As fresh hormonal vitality begins to awaken within you, what new idea or creative intention feels exciting to cultivate this week?',
+          date: formatDateToISO(new Date()),
+          suggestion: 'Take a brisk morning walk, journal your dreams, and nourish with fresh crisp greens.',
+        };
+      case 'ovulation':
+        return {
+          phase: 'ovulation',
+          phaseTitle: 'Ovulatory Phase (Peak Radiance & Connection)',
+          question:
+            'With your confidence and communication at their zenith, how can you express love, gratitude, or your authentic truth today?',
+          date: formatDateToISO(new Date()),
+          suggestion: 'Connect with a friend, voice an important goal, and celebrate your radiant presence.',
+        };
+      case 'luteal':
+      default:
+        return {
+          phase: 'luteal',
+          phaseTitle: 'Luteal Phase (Inward Wisdom & Nurture)',
+          question:
+            'As your internal rhythm winds inward toward sanctuary, what soothing boundary or comfort ritual will you gift your body this evening?',
+          date: formatDateToISO(new Date()),
+          suggestion: 'Dim warm lighting, enjoy roasted pumpkin or sunflower seeds, and protect your peace.',
+        };
+    }
+  }, []);
+
+  // Supabase Real-Time Synchronization when user session changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (!currentUser) {
+    let isCancelled = false;
+
+    async function syncFromSupabase() {
+      if (!user || user.isGuest || !isSupabaseConfigured || !supabase) {
         setSyncStatus('local_only');
         return;
       }
 
       setSyncStatus('syncing');
+      setSyncErrorMsg(null);
+
       try {
-        // 1. Fetch cycleSettings from Firestore
-        const settingsDoc = await getDoc(doc(db, 'users', currentUser.uid, 'cycleSettings', 'current'));
-        if (settingsDoc.exists()) {
-          setCycleSettings(settingsDoc.data() as CycleSettings);
-        } else {
-          // Upload local settings
-          await setDoc(
-            doc(db, 'users', currentUser.uid, 'cycleSettings', 'current'),
-            { ...cycleSettings, userId: currentUser.uid, updatedAt: new Date().toISOString() },
-            { merge: true }
-          );
-        }
+        // 1. Fetch Cycle Settings from Supabase
+        const { data: cycleData, error: cycleErr } = await supabase
+          .from('cycle_settings')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-        // 2. Fetch partnerPermissions from Firestore
-        const permDoc = await getDoc(doc(db, 'users', currentUser.uid, 'partnerPermissions', 'current'));
-        if (permDoc.exists()) {
-          setPartnerPermissions(permDoc.data() as PartnerPermissions);
-        }
-
-        // 3. Fetch dailyLogs from Firestore
-        const logsSnapshot = await getDocs(collection(db, 'users', currentUser.uid, 'dailyLogs'));
-        const cloudLogs: Record<string, DailyLogEntry> = {};
-        if (!logsSnapshot.empty) {
-          logsSnapshot.forEach((d) => {
-            cloudLogs[d.id] = d.data() as DailyLogEntry;
+        if (cycleData && !isCancelled) {
+          setCycleSettings({
+            lastPeriodDate: cycleData.last_period_date,
+            cycleLength: Number(cycleData.cycle_length) || 28,
+            periodDuration: Number(cycleData.period_duration) || 5,
+            lutealLength: Number(cycleData.luteal_length) || 14,
+          });
+        } else if (!cycleData && !cycleErr && !isCancelled) {
+          // Add local settings to Supabase
+          await supabase.from('cycle_settings').upsert({
+            user_id: user.id,
+            last_period_date: cycleSettings.lastPeriodDate,
+            cycle_length: cycleSettings.cycleLength,
+            period_duration: cycleSettings.periodDuration,
+            luteal_length: cycleSettings.lutealLength,
+            updated_at: new Date().toISOString(),
           });
         }
 
-        // Merge cloud logs and local logs (preserving user's entries)
-        const mergedLogs = { ...dailyLogs, ...cloudLogs };
-        setDailyLogs(mergedLogs);
+        // 2. Fetch Partner Permissions from Supabase
+        const { data: permData } = await supabase
+          .from('partner_permissions')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-        // Upload any local entries that aren't yet in Firestore
-        for (const [dateKey, entry] of Object.entries(dailyLogs)) {
-          if (!cloudLogs[dateKey]) {
-            await setDoc(
-              doc(db, 'users', currentUser.uid, 'dailyLogs', dateKey),
-              { ...entry, userId: currentUser.uid },
-              { merge: true }
-            );
-          }
+        if (permData && !isCancelled) {
+          setPartnerPermissions({
+            isLinked: Boolean(permData.is_linked),
+            partnerName: permData.partner_name || 'Arjun',
+            inviteCode: permData.invite_code || 'SAKHI-CARE-9281',
+            sharePhase: Boolean(permData.share_phase),
+            shareNextPeriod: Boolean(permData.share_next_period),
+            sharePMSMood: Boolean(permData.share_pms_mood),
+            shareDailyLogs: Boolean(permData.share_daily_logs),
+            shareSymptoms: Boolean(permData.share_symptoms),
+            sharePrivateNotes: Boolean(permData.share_private_notes),
+          });
         }
 
-        setSyncStatus('synced');
-        setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-      } catch (err) {
-        console.warn('Firestore initial sync error:', err);
-        setSyncStatus('error');
+        // 3. Fetch Daily Logs from Supabase
+        const { data: logsData, error: logsErr } = await supabase
+          .from('daily_logs')
+          .select('*')
+          .eq('user_id', user.id);
+
+        if (logsData && !isCancelled) {
+          const cloudLogs: Record<string, DailyLogEntry> = {};
+          logsData.forEach((row) => {
+            cloudLogs[row.date] = {
+              date: row.date,
+              mood: row.mood,
+              energy: Number(row.energy) || 3,
+              flow: row.flow,
+              symptoms: Array.isArray(row.symptoms) ? row.symptoms : [],
+              sleepHours: Number(row.sleep_hours) || 8,
+              waterGlasses: Number(row.water_glasses) || 8,
+              notes: row.notes || '',
+              updatedAt: row.updated_at,
+              syncedToCloud: true,
+            };
+          });
+
+          // Merge local and cloud entries (cloud wins conflicts, but unsynced locals are uploaded)
+          setDailyLogs((prev) => {
+            const merged = { ...prev, ...cloudLogs };
+            // Upload local entries that weren't in cloud yet
+            Object.values(prev).forEach(async (localEntry) => {
+              if (!cloudLogs[localEntry.date]) {
+                await supabase
+                  ?.from('daily_logs')
+                  .upsert({
+                    user_id: user.id,
+                    date: localEntry.date,
+                    mood: localEntry.mood,
+                    energy: localEntry.energy,
+                    flow: localEntry.flow,
+                    symptoms: localEntry.symptoms,
+                    sleep_hours: localEntry.sleepHours,
+                    water_glasses: localEntry.waterGlasses,
+                    notes: localEntry.notes,
+                    updated_at: new Date().toISOString(),
+                  }, { onConflict: 'user_id,date' });
+              }
+            });
+            return merged;
+          });
+        }
+
+        if (!isCancelled) {
+          setSyncStatus('synced');
+          setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        }
+      } catch (err: any) {
+        console.warn('Supabase sync notice:', err?.message || err);
+        if (!isCancelled) {
+          setSyncStatus('error');
+          setSyncErrorMsg('Could not reach cloud database. Operating safely in local offline mode.');
+        }
       }
-    });
+    }
 
-    return () => unsubscribe();
-  }, []);
+    syncFromSupabase();
 
-  // Local storage synchronization as backup
+    return () => {
+      isCancelled = true;
+    };
+  }, [user]);
+
+  // Local storage backup
   useEffect(() => {
     localStorage.setItem('sakhi_lang', language);
   }, [language]);
@@ -387,117 +477,184 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('sakhi_buddy_profile', JSON.stringify(buddyProfile));
   }, [buddyProfile]);
 
+  useEffect(() => {
+    if (dailyReflectionPrompt) {
+      localStorage.setItem('sakhi_daily_reflection', JSON.stringify(dailyReflectionPrompt));
+    }
+  }, [dailyReflectionPrompt]);
+
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
   };
 
-  const updateCycleSettings = async (settings: Partial<CycleSettings>) => {
+  // Update Cycle Settings with Supabase persistence
+  const updateCycleSettings = async (settings: Partial<CycleSettings>): Promise<boolean> => {
     const updated = { ...cycleSettings, ...settings };
     setCycleSettings(updated);
 
-    if (auth.currentUser) {
+    if (user && !user.isGuest && isSupabaseConfigured && supabase) {
       try {
-        await setDoc(doc(db, 'users', auth.currentUser.uid, 'cycleSettings', 'current'), {
-          ...updated,
-          userId: auth.currentUser.uid,
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
+        const { error } = await supabase.from('cycle_settings').upsert({
+          user_id: user.id,
+          last_period_date: updated.lastPeriodDate,
+          cycle_length: updated.cycleLength,
+          period_duration: updated.periodDuration,
+          luteal_length: updated.lutealLength,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+
+        if (error) {
+          console.warn('Supabase cycle_settings save warning:', error.message);
+          return false;
+        }
+        return true;
       } catch (e) {
-        console.warn('Firestore save cycleSettings error:', e);
+        console.warn('Supabase cycle_settings network error:', e);
+        return false;
       }
     }
+    return true;
   };
 
-  const saveDailyLog = async (entry: DailyLogEntry) => {
-    const updatedEntry = { ...entry, updatedAt: new Date().toISOString() };
+  // Save Daily Log with confirmed Supabase write & reflection question generation
+  const saveDailyLog = async (entry: DailyLogEntry): Promise<boolean> => {
+    const updatedEntry: DailyLogEntry = {
+      ...entry,
+      updatedAt: new Date().toISOString(),
+      syncedToCloud: false,
+    };
+
     setDailyLogs((prev) => ({
       ...prev,
       [entry.date]: updatedEntry,
     }));
 
-    if (auth.currentUser) {
+    // Trigger daily reflection question based on user's current cycle phase!
+    const cycleStatus = calculateCycleStatus(cycleSettings);
+    const reflection = generateReflectionForPhase(cycleStatus.currentPhase);
+    setDailyReflectionPrompt(reflection);
+
+    if (user && !user.isGuest && isSupabaseConfigured && supabase) {
       setSyncStatus('syncing');
       try {
-        await setDoc(
-          doc(db, 'users', auth.currentUser.uid, 'dailyLogs', entry.date),
-          {
-            ...updatedEntry,
-            userId: auth.currentUser.uid,
-          },
-          { merge: true }
-        );
+        const { error } = await supabase.from('daily_logs').upsert({
+          user_id: user.id,
+          date: entry.date,
+          mood: entry.mood,
+          energy: entry.energy,
+          flow: entry.flow,
+          symptoms: entry.symptoms,
+          sleep_hours: entry.sleepHours,
+          water_glasses: entry.waterGlasses,
+          notes: entry.notes,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,date' });
+
+        if (error) {
+          console.warn('Supabase daily_logs write error:', error.message);
+          setSyncStatus('error');
+          setSyncErrorMsg(error.message);
+          return false;
+        }
+
+        // Mark as confirmed written
+        setDailyLogs((prev) => ({
+          ...prev,
+          [entry.date]: { ...updatedEntry, syncedToCloud: true },
+        }));
         setSyncStatus('synced');
         setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-      } catch (e) {
-        console.warn('Firestore save dailyLog error:', e);
+        return true;
+      } catch (e: any) {
+        console.warn('Network error saving daily log to Supabase:', e);
         setSyncStatus('error');
+        setSyncErrorMsg('Network interrupted. Saved locally.');
+        return false;
       }
     } else {
       setSyncStatus('local_only');
+      return true;
     }
   };
 
-  const deleteDailyLog = async (date: string) => {
+  // Delete Daily Log entry with confirmed Supabase removal
+  const deleteDailyLog = async (date: string): Promise<boolean> => {
     setDailyLogs((prev) => {
       const copy = { ...prev };
       delete copy[date];
       return copy;
     });
 
-    if (auth.currentUser) {
+    if (user && !user.isGuest && isSupabaseConfigured && supabase) {
       try {
-        await deleteDoc(doc(db, 'users', auth.currentUser.uid, 'dailyLogs', date));
+        const { error } = await supabase
+          .from('daily_logs')
+          .delete()
+          .match({ user_id: user.id, date });
+
+        if (error) {
+          console.warn('Supabase delete error:', error.message);
+          return false;
+        }
+        return true;
       } catch (e) {
-        console.warn('Firestore delete dailyLog error:', e);
+        console.warn('Supabase delete dailyLog network error:', e);
+        return false;
       }
     }
+    return true;
   };
 
-  const getLogForDate = (date: string) => dailyLogs[date];
+  const getLogForDate = (date: string): DailyLogEntry | undefined => {
+    return dailyLogs[date];
+  };
 
-  const updatePartnerPermissions = async (updates: Partial<PartnerPermissions>) => {
+  const updatePartnerPermissions = async (updates: Partial<PartnerPermissions>): Promise<boolean> => {
     const updated = { ...partnerPermissions, ...updates };
     setPartnerPermissions(updated);
 
-    if (auth.currentUser) {
+    if (user && !user.isGuest && isSupabaseConfigured && supabase) {
       try {
-        await setDoc(doc(db, 'users', auth.currentUser.uid, 'partnerPermissions', 'current'), {
-          ...updated,
-          userId: auth.currentUser.uid,
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
-      } catch (e) {
-        console.warn('Firestore save partnerPermissions error:', e);
+        const { error } = await supabase.from('partner_permissions').upsert({
+          user_id: user.id,
+          is_linked: updated.isLinked,
+          partner_name: updated.partnerName,
+          invite_code: updated.inviteCode,
+          share_phase: updated.sharePhase,
+          share_next_period: updated.shareNextPeriod,
+          share_pms_mood: updated.sharePMSMood,
+          share_daily_logs: updated.shareDailyLogs,
+          share_symptoms: updated.shareSymptoms,
+          share_private_notes: updated.sharePrivateNotes,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
+
+        return !error;
+      } catch {
+        return false;
       }
     }
+    return true;
   };
 
-  const disconnectPartner = async () => {
-    const updated = {
-      ...partnerPermissions,
+  const disconnectPartner = () => {
+    updatePartnerPermissions({
       isLinked: false,
-      partnerName: '',
-      inviteCode: `SAKHI-CARE-${Math.floor(1000 + Math.random() * 9000)}`,
-    };
-    setPartnerPermissions(updated);
-
-    if (auth.currentUser) {
-      try {
-        await setDoc(doc(db, 'users', auth.currentUser.uid, 'partnerPermissions', 'current'), {
-          ...updated,
-          userId: auth.currentUser.uid,
-        }, { merge: true });
-      } catch (e) {
-        console.warn('Firestore disconnect partner error:', e);
-      }
-    }
+      shareDailyLogs: false,
+      shareSymptoms: false,
+      sharePrivateNotes: false,
+    });
   };
 
-  const addForumPost = async (title: string, content: string, category: ForumPost['category']) => {
+  const addForumPost = async (
+    title: string,
+    content: string,
+    category: ForumPost['category']
+  ): Promise<boolean> => {
     const newPost: ForumPost = {
       id: `post-${Date.now()}`,
-      authorPseudonym: `RosePetal_${Math.floor(10 + Math.random() * 90)}`,
-      authorAvatar: '🌺',
+      authorPseudonym: user?.displayName ? `${user.displayName.split(' ')[0]}_${Math.floor(10 + Math.random() * 89)}` : 'SakhiSister_22',
+      authorAvatar: '🌸',
       title,
       content,
       category,
@@ -506,68 +663,151 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       userReactions: { heart: true },
       comments: [],
     };
+
     setForumPosts((prev) => [newPost, ...prev]);
 
-    if (auth.currentUser) {
+    if (user && !user.isGuest && isSupabaseConfigured && supabase) {
       try {
-        await setDoc(doc(db, 'forumPosts', newPost.id), {
-          ...newPost,
-          authorUid: auth.currentUser.uid,
+        await supabase.from('forum_posts').insert({
+          user_id: user.id,
+          author_pseudonym: newPost.authorPseudonym,
+          author_avatar: newPost.authorAvatar,
+          title,
+          content,
+          category,
+          reactions: newPost.reactions,
+          comments: [],
         });
       } catch (e) {
-        console.warn('Firestore save forum post error:', e);
+        console.warn('Could not sync forum post to Supabase:', e);
       }
     }
+    return true;
   };
 
   const addForumComment = (postId: string, text: string) => {
     setForumPosts((prev) =>
-      prev.map((post) => {
-        if (post.id === postId) {
-          const newComment = {
-            id: `c-${Date.now()}`,
-            author: 'You (Anonymous)',
-            text,
-            createdAt: formatDateToISO(new Date()),
-          };
-          return { ...post, comments: [...post.comments, newComment] };
-        }
-        return post;
+      prev.map((p) => {
+        if (p.id !== postId) return p;
+        const newComment = {
+          id: `c-${Date.now()}`,
+          author: user?.displayName ? `${user.displayName.split(' ')[0]}` : 'Sister_Bloom',
+          text,
+          createdAt: formatDateToISO(new Date()),
+        };
+        return {
+          ...p,
+          comments: [...p.comments, newComment],
+        };
       })
     );
   };
 
   const toggleReaction = (postId: string, reactionType: 'heart' | 'helpful' | 'hug') => {
     setForumPosts((prev) =>
-      prev.map((post) => {
-        if (post.id === postId) {
-          const hasReacted = Boolean(post.userReactions[reactionType]);
-          const currentCount = post.reactions[reactionType] || 0;
-          return {
-            ...post,
-            reactions: {
-              ...post.reactions,
-              [reactionType]: hasReacted ? Math.max(0, currentCount - 1) : currentCount + 1,
-            },
-            userReactions: {
-              ...post.userReactions,
-              [reactionType]: !hasReacted,
-            },
-          };
-        }
-        return post;
+      prev.map((p) => {
+        if (p.id !== postId) return p;
+        const currentlyActive = p.userReactions?.[reactionType];
+        const newCount = (p.reactions[reactionType] || 0) + (currentlyActive ? -1 : 1);
+        return {
+          ...p,
+          reactions: {
+            ...p.reactions,
+            [reactionType]: Math.max(0, newCount),
+          },
+          userReactions: {
+            ...p.userReactions,
+            [reactionType]: !currentlyActive,
+          },
+        };
       })
     );
   };
 
   const reportPost = (postId: string) => {
     setForumPosts((prev) =>
-      prev.map((post) => (post.id === postId ? { ...post, isReported: true } : post))
+      prev.map((p) => (p.id === postId ? { ...p, isReported: true } : p))
     );
   };
 
   const updateBuddyProfile = (updates: Partial<BuddyProfile>) => {
     setBuddyProfile((prev) => ({ ...prev, ...updates }));
+  };
+
+  // Full manual cloud sync trigger
+  const syncAllLogsToCloud = async (): Promise<boolean> => {
+    if (!user || user.isGuest) {
+      setSyncStatus('local_only');
+      return false;
+    }
+    if (!isSupabaseConfigured || !supabase) {
+      setSyncStatus('local_only');
+      return false;
+    }
+
+    setSyncStatus('syncing');
+    setSyncErrorMsg(null);
+    try {
+      // 1. Sync Cycle Settings
+      await supabase.from('cycle_settings').upsert({
+        user_id: user.id,
+        last_period_date: cycleSettings.lastPeriodDate,
+        cycle_length: cycleSettings.cycleLength,
+        period_duration: cycleSettings.periodDuration,
+        luteal_length: cycleSettings.lutealLength,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+
+      // 2. Sync Partner Permissions
+      await supabase.from('partner_permissions').upsert({
+        user_id: user.id,
+        is_linked: partnerPermissions.isLinked,
+        partner_name: partnerPermissions.partnerName,
+        invite_code: partnerPermissions.inviteCode,
+        share_phase: partnerPermissions.sharePhase,
+        share_next_period: partnerPermissions.shareNextPeriod,
+        share_pms_mood: partnerPermissions.sharePMSMood,
+        share_daily_logs: partnerPermissions.shareDailyLogs,
+        share_symptoms: partnerPermissions.shareSymptoms,
+        share_private_notes: partnerPermissions.sharePrivateNotes,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+
+      // 3. Sync all daily logs
+      const entries = Object.values(dailyLogs);
+      for (const entry of entries) {
+        await supabase.from('daily_logs').upsert({
+          user_id: user.id,
+          date: entry.date,
+          mood: entry.mood,
+          energy: entry.energy,
+          flow: entry.flow,
+          symptoms: entry.symptoms,
+          sleep_hours: entry.sleepHours,
+          water_glasses: entry.waterGlasses,
+          notes: entry.notes,
+          updated_at: entry.updatedAt || new Date().toISOString(),
+        }, { onConflict: 'user_id,date' });
+      }
+
+      // Mark all logs as synced
+      setDailyLogs((prev) => {
+        const copy: Record<string, DailyLogEntry> = {};
+        for (const [k, v] of Object.entries(prev)) {
+          copy[k] = { ...v, syncedToCloud: true };
+        }
+        return copy;
+      });
+
+      setSyncStatus('synced');
+      setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      return true;
+    } catch (err: any) {
+      console.warn('Manual cloud sync failed:', err);
+      setSyncStatus('error');
+      setSyncErrorMsg(err?.message || 'Sync failed. Local data preserved.');
+      return false;
+    }
   };
 
   return (
@@ -601,7 +841,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedCalendarDate,
         syncStatus,
         lastSyncedTime,
+        syncErrorMsg,
         syncAllLogsToCloud,
+        dailyReflectionPrompt,
+        dismissReflectionPrompt,
       }}
     >
       {children}

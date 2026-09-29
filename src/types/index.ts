@@ -22,6 +22,7 @@ export interface DailyLogEntry {
   waterGlasses: number;
   notes?: string;
   updatedAt?: string;
+  syncedToCloud?: boolean;
 }
 
 export interface PartnerPermissions {
@@ -82,17 +83,26 @@ export interface VerifiedDoctor {
   name: string;
   qualifications: string;
   specialty: string;
+  hospital: string;
+  location: string;
   registrationNumber: string;
   council: string;
-  verifiedOfficialSource: string;
-  clinicAddress: string;
+  experienceYears: number;
+  consultationFee: string;
   teleconsultAvailable: boolean;
-  contactUrl?: string;
+  appointmentUrl: string;
+  officialEmail: string;
+  bio: string;
+  photoUrl?: string;
+  photoEmoji?: string;
 }
 
 export interface PeriodProduct {
   id: string;
   name: string;
+  brand?: string;
+  price?: string;
+  rating?: number;
   category: 'cups' | 'pads' | 'tampons' | 'panties' | 'relief';
   description: string;
   pros: string[];
@@ -101,6 +111,43 @@ export interface PeriodProduct {
   cleaningInstructions?: string;
   wearTimeHours: string;
   ecoImpact: 'Reusable / Low' | 'Biodegradable' | 'Single-Use';
+  officialRetailUrl?: string;
+  inStock?: boolean;
   tutorialYoutubeId: string;
   tutorialTitle: string;
+}
+
+export interface AuthUser {
+  id: string;
+  email?: string;
+  displayName?: string;
+  photoURL?: string;
+  isGuest?: boolean;
+  provider?: 'google' | 'email' | 'guest';
+  createdAt?: string;
+}
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  price: string;
+  period: string;
+  badge?: string;
+  description: string;
+  features: string[];
+  isPopular?: boolean;
+  tier: 'free' | 'plus' | 'premium';
+}
+
+export interface DoctorInquiry {
+  id: string;
+  doctorId: string;
+  doctorName: string;
+  patientName: string;
+  patientEmail: string;
+  symptomsSummary: string;
+  preferredDate: string;
+  notes?: string;
+  status: 'pending' | 'confirmed';
+  createdAt: string;
 }
