@@ -17,6 +17,7 @@ import { SettingsSection } from './components/SettingsSection';
 import { WorkspaceHub } from './components/WorkspaceHub';
 import { PlansSection } from './components/PlansSection';
 import { SakhiAIChat } from './components/SakhiAIChat';
+import { SplashLoader } from './components/SplashLoader';
 import { calculateCycleStatus, PHASE_COLORS } from './utils/cycleCalculations';
 import { getTranslation } from './utils/translations';
 import { IMAGES } from './assets/images';
@@ -53,6 +54,7 @@ const MainLayout: React.FC = () => {
 
   const { user } = useAuth();
   const [isAIChatModalOpen, setIsAIChatModalOpen] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
 
   const t = (key: string, params?: Record<string, string | number>) =>
     getTranslation(language, key, params);
@@ -62,6 +64,8 @@ const MainLayout: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col text-[#3D1E28] pb-20 md:pb-12 relative overflow-hidden">
+      {/* Animated Cloudy Glowy Loading Page */}
+      {showSplash && <SplashLoader onComplete={() => setShowSplash(false)} />}
       {/* Ambient Dreamy Floating Cloud Orbs in Background */}
       <div className="fixed -top-40 -left-40 w-96 h-96 rounded-full cloud-glow-1 pointer-events-none -z-10 blur-3xl opacity-60 animate-pulse" />
       <div className="fixed top-1/3 -right-40 w-[500px] h-[500px] rounded-full cloud-glow-2 pointer-events-none -z-10 blur-3xl opacity-50" />
