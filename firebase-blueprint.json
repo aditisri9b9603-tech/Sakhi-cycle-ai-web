@@ -2,16 +2,76 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "User profile in Sakhi Cycle",
+      "description": "User profile in Sakhi Cycle including birth date and health goals",
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
         "email": { "type": "string" },
         "displayName": { "type": "string" },
+        "birthDate": { "type": "string" },
+        "healthGoals": { "type": "string" },
         "photoURL": { "type": "string" },
         "createdAt": { "type": "string" }
       },
-      "required": ["uid", "email"]
+      "required": ["email", "displayName"]
+    },
+    "Cycle": {
+      "title": "Cycle",
+      "description": "Menstrual cycle record with start date, end date, and duration",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "cycleLength": { "type": "number" },
+        "periodDuration": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["startDate"]
+    },
+    "LogEntry": {
+      "title": "LogEntry",
+      "description": "Daily symptoms, flow intensity, mood, and notes for cycle tracking",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "cycleId": { "type": "string" },
+        "entryDate": { "type": "string" },
+        "mood": { "type": "string" },
+        "flowIntensity": { "type": "string" },
+        "notes": { "type": "string" },
+        "physicalSymptoms": { "type": "string" },
+        "energy": { "type": "number" },
+        "sleepHours": { "type": "number" },
+        "waterGlasses": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["entryDate", "mood", "flowIntensity"]
+    },
+    "Insight": {
+      "title": "Insight",
+      "description": "Algorithmic and AI wellness insights generated for user's cycle",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["type", "content"]
+    },
+    "Reminder": {
+      "title": "Reminder",
+      "description": "Cycle and wellness notifications and alerts",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "reminderType": { "type": "string" },
+        "reminderDate": { "type": "string" },
+        "isEnabled": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["reminderType", "reminderDate"]
     },
     "CycleSettings": {
       "title": "CycleSettings",
@@ -47,7 +107,7 @@
     },
     "PartnerPermissions": {
       "title": "PartnerPermissions",
-      "description": "Granular sharing controls for Flo-style partner care",
+      "description": "Granular sharing controls for partner care",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
@@ -80,7 +140,7 @@
     },
     "PaymentRecord": {
       "title": "PaymentRecord",
-      "description": "Verified Razorpay subscription payments",
+      "description": "Verified subscription payments",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
@@ -98,6 +158,26 @@
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/User" },
       "description": "User profile document"
+    },
+    "/users/{userId}/cycles/{cycleId}": {
+      "schema": { "$ref": "#/entities/Cycle" },
+      "description": "User cycle records"
+    },
+    "/users/{userId}/cycles/{cycleId}/logEntries/{logEntryId}": {
+      "schema": { "$ref": "#/entities/LogEntry" },
+      "description": "Cycle-specific daily log entries"
+    },
+    "/users/{userId}/logEntries/{logEntryId}": {
+      "schema": { "$ref": "#/entities/LogEntry" },
+      "description": "User daily log entries"
+    },
+    "/users/{userId}/insights/{insightId}": {
+      "schema": { "$ref": "#/entities/Insight" },
+      "description": "Cycle wellness and AI health insights"
+    },
+    "/users/{userId}/reminders/{reminderId}": {
+      "schema": { "$ref": "#/entities/Reminder" },
+      "description": "Cycle reminders and notifications"
     },
     "/users/{userId}/cycleSettings/current": {
       "schema": { "$ref": "#/entities/CycleSettings" },

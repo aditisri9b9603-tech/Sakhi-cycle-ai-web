@@ -19,31 +19,54 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    // Connection test document
+    // Connection test document for boot verification
     match /test/connection {
       allow read: if true;
     }
 
-    // User profile document
+    // User profile document and subcollections
     match /users/{userId} {
       allow read, write: if isValidId(userId) && isOwner(userId);
 
-      // User cycle settings
-      match /cycleSettings/{settingId} {
+      // Cycle history and tracking
+      match /cycles/{cycleId} {
         allow read, write: if isValidId(userId) && isOwner(userId);
+
+        // Nested log entries under cycle
+        match /logEntries/{entryId} {
+          allow read, write: if isValidId(userId) && isOwner(userId);
+        }
       }
 
-      // User daily logs
+      // Direct log entries / daily logs
+      match /logEntries/{entryId} {
+        allow read, write: if isValidId(userId) && isOwner(userId);
+      }
       match /dailyLogs/{date} {
         allow read, write: if isValidId(userId) && isOwner(userId);
       }
 
-      // User partner permissions
+      // Cycle Settings
+      match /cycleSettings/{settingId} {
+        allow read, write: if isValidId(userId) && isOwner(userId);
+      }
+
+      // Personalized algorithmic & AI cycle insights
+      match /insights/{insightId} {
+        allow read, write: if isValidId(userId) && isOwner(userId);
+      }
+
+      // Cycle & wellness reminders
+      match /reminders/{reminderId} {
+        allow read, write: if isValidId(userId) && isOwner(userId);
+      }
+
+      // Partner permissions
       match /partnerPermissions/{permId} {
         allow read, write: if isValidId(userId) && isOwner(userId);
       }
 
-      // User memberships & verified payments
+      // Subscriptions & payments
       match /payments/{paymentId} {
         allow read, write: if isValidId(userId) && isOwner(userId);
       }

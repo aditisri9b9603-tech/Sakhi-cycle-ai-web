@@ -6,6 +6,10 @@ import {
   PartnerPermissions,
   ForumPost,
   BuddyProfile,
+  UserProfile,
+  ReminderModel,
+  CycleModel,
+  LogEntryModel,
 } from '../types';
 import { formatDateToISO } from '../utils/cycleCalculations';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
@@ -28,6 +32,11 @@ interface AppContextType {
   saveDailyLog: (entry: DailyLogEntry) => Promise<boolean>;
   deleteDailyLog: (date: string) => Promise<boolean>;
   getLogForDate: (date: string) => DailyLogEntry | undefined;
+  userProfile: UserProfile | null;
+  updateUserProfile: (profile: Partial<UserProfile>) => Promise<boolean>;
+  reminders: ReminderModel[];
+  saveReminder: (reminder: Omit<ReminderModel, 'id'>, id?: string) => Promise<boolean>;
+  deleteReminder: (id: string) => Promise<boolean>;
   partnerPermissions: PartnerPermissions;
   updatePartnerPermissions: (updates: Partial<PartnerPermissions>) => void;
   disconnectPartner: () => void;
@@ -167,6 +176,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return DEFAULT_BUDDY_PROFILE;
   });
 
+  // User Profile (matching User schema: email, displayName, birthDate, healthGoals)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
+    const saved = localStorage.getItem('sakhi_user_profile');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return null;
+  });
+
+  // Reminders (matching Reminder schema: reminderType, reminderDate, isEnabled)
+  const [reminders, setReminders] = useState<ReminderModel[]>(() => {
+    const saved = localStorage.getItem('sakhi_user_reminders');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return [
+      {
+        id: 'rem-default-1',
+        userId: 'local',
+        reminderType: 'Period Approaching (2 Days Notice)',
+        reminderDate: '2026-10-15T09:00:00Z',
+        isEnabled: true,
+      },
+      {
+        id: 'rem-default-2',
+        userId: 'local',
+        reminderType: 'Daily Seed Cycling & Hydration',
+        reminderDate: '2026-10-01T08:30:00Z',
+        isEnabled: true,
+      },
+    ];
+  });
+
   // Community forum posts
   const [forumPosts, setForumPosts] = useState<ForumPost[]>([
     {
@@ -263,6 +309,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (Object.keys(cloudLogs).length > 0) {
               setDailyLogs(cloudLogs);
             }
+          }
+
+          // Load User Profile (User entity)
+          const userDocRef = doc(firestore, 'users', currentUserId);
+          const userSnap = await getDoc(userDocRef);
+          if (userSnap.exists() && !isCancelled) {
+            const uData = userSnap.data();
+            setUserProfile({
+              uid: currentUserId,
+              email: uData.email || user?.email || '',
+              displayName: uData.displayName || user?.displayName || 'Sakhi Member',
+              birthDate: uData.birthDate || '',
+              healthGoals: uData.healthGoals || 'Regular rhythm, balanced energy, cramp relief',
+              photoURL: uData.photoURL || user?.photoURL || '',
+              createdAt: uData.createdAt || '',
+            });
+          } else if (!isCancelled) {
+            // Initialize basic profile from auth
+            const initialProfile: UserProfile = {
+              uid: currentUserId,
+              email: user?.email || '',
+              displayName: user?.displayName || 'Sakhi Member',
+              birthDate: '',
+              healthGoals: 'Regular rhythm, balanced energy, cramp relief',
+              photoURL: user?.photoURL || '',
+            };
+            setUserProfile(initialProfile);
+            setDoc(userDocRef, initialProfile, { merge: true }).catch(() => {});
+          }
+
+          // Load Reminders (Reminder entity)
+          const remindersColRef = collection(firestore, 'users', currentUserId, 'reminders');
+          const remindersSnap = await getDocs(remindersColRef);
+          if (!isCancelled && !remindersSnap.empty) {
+            const loadedReminders: ReminderModel[] = [];
+            remindersSnap.forEach((rDoc) => {
+              loadedReminders.push({ id: rDoc.id, ...rDoc.data() } as ReminderModel);
+            });
+            setReminders(loadedReminders);
           }
 
           // Load Membership
@@ -508,6 +593,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           { merge: true }
         );
+
+        // Also save to Cycle entity in Firestore
+        const cycleDocRef = doc(firestore, 'users', currentUserId, 'cycles', 'current');
+        await setDoc(
+          cycleDocRef,
+          {
+            userId: currentUserId,
+            startDate: updated.lastPeriodDate,
+            cycleLength: updated.cycleLength,
+            periodDuration: updated.periodDuration,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
         setSyncStatus('synced');
         setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
         return true;
@@ -586,6 +686,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           { merge: true }
         );
 
+        // Also sync LogEntry entity matching the LogEntry schema
+        const logEntryRef = doc(firestore, 'users', currentUserId, 'logEntries', entry.date);
+        await setDoc(
+          logEntryRef,
+          {
+            userId: currentUserId,
+            cycleId: 'current',
+            entryDate: entry.date,
+            mood: entry.mood || 'calm',
+            flowIntensity: entry.flow || 'none',
+            notes: entry.notes || '',
+            physicalSymptoms: (entry.symptoms || []).join(', '),
+            energy: entry.energy || 3,
+            sleepHours: entry.sleepHours || 8,
+            waterGlasses: entry.waterGlasses || 8,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
         setDailyLogs((prev) => ({
           ...prev,
           [entry.date]: { ...updatedEntry, syncedToCloud: true },
@@ -656,6 +776,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const docRef = doc(firestore, 'users', currentUserId, 'dailyLogs', date);
         await deleteDoc(docRef);
+        const logEntryRef = doc(firestore, 'users', currentUserId, 'logEntries', date);
+        await deleteDoc(logEntryRef).catch(() => {});
         return true;
       } catch (err) {
         console.warn('Firestore delete error:', err);
@@ -673,6 +795,84 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
+    return true;
+  };
+
+  // Update User Profile (User entity in Firestore)
+  const updateUserProfile = async (profileUpdates: Partial<UserProfile>): Promise<boolean> => {
+    const currentUserId = user ? (user.uid || user.id) : 'guest';
+    const merged: UserProfile = {
+      uid: currentUserId,
+      email: user?.email || '',
+      displayName: user?.displayName || 'Sakhi Member',
+      birthDate: '',
+      healthGoals: 'Regular rhythm, balanced energy, cramp relief',
+      photoURL: user?.photoURL || '',
+      ...(userProfile || {}),
+      ...profileUpdates,
+    };
+
+    setUserProfile(merged);
+    localStorage.setItem('sakhi_user_profile', JSON.stringify(merged));
+
+    if (user && activeProvider === 'firebase' && firestore) {
+      try {
+        const userDocRef = doc(firestore, 'users', currentUserId);
+        await setDoc(userDocRef, { ...merged, updatedAt: new Date().toISOString() }, { merge: true });
+        return true;
+      } catch (e) {
+        console.error('Failed to update user profile in Firestore:', e);
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // Save Reminder (Reminder entity in Firestore)
+  const saveReminder = async (reminder: Omit<ReminderModel, 'id'>, id?: string): Promise<boolean> => {
+    const currentUserId = user ? (user.uid || user.id) : 'guest';
+    const reminderId = id || `rem-${Date.now()}`;
+    const newReminder: ReminderModel = {
+      id: reminderId,
+      ...reminder,
+      userId: currentUserId,
+      createdAt: new Date().toISOString(),
+    };
+
+    const nextReminders = [...reminders.filter((r) => r.id !== reminderId), newReminder];
+    setReminders(nextReminders);
+    localStorage.setItem('sakhi_user_reminders', JSON.stringify(nextReminders));
+
+    if (user && activeProvider === 'firebase' && firestore) {
+      try {
+        const remRef = doc(firestore, 'users', currentUserId, 'reminders', reminderId);
+        await setDoc(remRef, newReminder, { merge: true });
+        return true;
+      } catch (e) {
+        console.error('Failed to save reminder in Firestore:', e);
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // Delete Reminder
+  const deleteReminder = async (id: string): Promise<boolean> => {
+    const nextReminders = reminders.filter((r) => r.id !== id);
+    setReminders(nextReminders);
+    localStorage.setItem('sakhi_user_reminders', JSON.stringify(nextReminders));
+
+    if (user && activeProvider === 'firebase' && firestore) {
+      const currentUserId = user.uid || user.id;
+      try {
+        const remRef = doc(firestore, 'users', currentUserId, 'reminders', id);
+        await deleteDoc(remRef);
+        return true;
+      } catch (e) {
+        console.error('Failed to delete reminder from Firestore:', e);
+        return false;
+      }
+    }
     return true;
   };
 
@@ -835,6 +1035,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         saveDailyLog,
         deleteDailyLog,
         getLogForDate,
+        userProfile,
+        updateUserProfile,
+        reminders,
+        saveReminder,
+        deleteReminder,
         partnerPermissions,
         updatePartnerPermissions,
         disconnectPartner,

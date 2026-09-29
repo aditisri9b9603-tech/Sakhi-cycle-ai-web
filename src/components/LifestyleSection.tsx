@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { CyclePhase } from '../types';
 import { calculateCycleStatus, PHASE_COLORS } from '../utils/cycleCalculations';
 import { IMAGES } from '../assets/images';
+import { YouTubeEmbed } from './YouTubeEmbed';
 import {
   Utensils,
   Activity,
@@ -11,6 +12,9 @@ import {
   Heart,
   ChevronRight,
   ShieldCheck,
+  Video,
+  Play,
+  ExternalLink,
 } from 'lucide-react';
 
 interface PhaseGuide {
@@ -250,6 +254,98 @@ export const LifestyleSection: React.FC = () => {
           <span>
             These suggestions offer loving wellness inspiration grounded in lifestyle science. Always consult with your certified healthcare practitioner or registered dietitian for personalized dietary and medical recommendations.
           </span>
+        </div>
+      </div>
+
+      {/* Curated Video Masterclasses with Verified YouTube Embed */}
+      <div className="p-6 bg-white/95 rounded-3xl border border-[#F4D5DC] shadow-xs space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#FCECEF] pb-4">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#D9658B]">
+              <Video className="w-3.5 h-3.5" />
+              <span>Verified Video Masterclasses</span>
+            </div>
+            <h3 className="text-xl font-serif font-bold text-[#3D1E28]">
+              Expert Guidance: Physiology, Yoga & Cycle Health
+            </h3>
+            <p className="text-xs text-[#7E5265]">
+              Validated educational videos loaded via privacy-enhanced players with safe YouTube fallbacks.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Video 1: Cycle Syncing & Nutrition */}
+          <div className="bg-[#FFF8F8] rounded-2xl p-4 border border-[#F4D5DC] space-y-3">
+            <YouTubeEmbed
+              videoSource="2X78NWuRfJU"
+              title="Cycle Syncing: Nutrition & Movement for Every Phase"
+              channelName="Wellness Masterclasses"
+              description="Learn how changing metabolic demands across follicular, ovulation, luteal, and menstrual phases influence nutrient absorption and daily vitality."
+            />
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-[#3D1E28]">
+                Cycle Syncing: Nutrition & Movement for Every Phase
+              </h4>
+              <p className="text-xs text-[#7E5265]">
+                How to align high-energy HIIT workouts during follicular surges and transition to magnesium-dense nourishing foods in the luteal window.
+              </p>
+            </div>
+          </div>
+
+          {/* Video 2: Gentle Yoga for Cramp Relief */}
+          <div className="bg-[#FFF8F8] rounded-2xl p-4 border border-[#F4D5DC] space-y-3">
+            <YouTubeEmbed
+              videoSource="4JaCcp39iVI"
+              title="Gentle Yoga for Menstrual Relief & Cramps"
+              channelName="Mindful Movement"
+              description="Somatic pelvic floor release, restorative stretches, and gentle diaphragmatic breathing for painful cramps and lower back fatigue."
+            />
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-[#3D1E28]">
+                Gentle Yoga for Menstrual Relief & Cramps
+              </h4>
+              <p className="text-xs text-[#7E5265]">
+                Soothing physical postures designed to increase uterine circulation and quiet sympathetic nervous system tension during menstruation.
+              </p>
+            </div>
+          </div>
+
+          {/* Video 3: Menstrual Cup Step-by-Step */}
+          <div className="bg-[#FFF8F8] rounded-2xl p-4 border border-[#F4D5DC] space-y-3">
+            <YouTubeEmbed
+              videoSource="CbbhxZQA1ps"
+              title="How to Use a Menstrual Cup: Step-by-Step Guide for Beginners"
+              channelName="Diana In The Pink"
+              description="Beginner fold techniques, insertion angle, checking the vacuum seal, and gentle removal without pinching."
+            />
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-[#3D1E28]">
+                How to Use a Menstrual Cup: Step-by-Step Guide
+              </h4>
+              <p className="text-xs text-[#7E5265]">
+                Everything you need to know about sterilizing, positioning, and comfortable wear with zero leaks or discomfort.
+              </p>
+            </div>
+          </div>
+
+          {/* Video 4: Period Hygiene & Healthy Habits */}
+          <div className="bg-[#FFF8F8] rounded-2xl p-4 border border-[#F4D5DC] space-y-3">
+            <YouTubeEmbed
+              videoSource="NGvY5aX7LPw"
+              title="Period Hygiene & Choosing Body-Safe Wellness Products"
+              channelName="Glamrs"
+              description="Dermatologist-approved guidance on changing intervals, avoiding harsh synthetic fragrances, and maintaining optimal intimate health."
+            />
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-[#3D1E28]">
+                Period Hygiene & Body-Safe Products
+              </h4>
+              <p className="text-xs text-[#7E5265]">
+                Best practices for preventing vulvar irritation, selecting organic cotton, and understanding vaginal pH balance.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>

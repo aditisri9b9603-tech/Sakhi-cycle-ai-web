@@ -139,6 +139,55 @@ export interface SubscriptionPlan {
   tier: 'free' | 'plus' | 'premium';
 }
 
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  birthDate?: string;
+  healthGoals?: string;
+  photoURL?: string;
+  createdAt?: string;
+}
+
+export interface CycleModel {
+  id?: string;
+  userId: string;
+  startDate: string;
+  endDate?: string;
+  cycleLength?: number;
+  periodDuration?: number;
+  createdAt?: string;
+}
+
+export interface LogEntryModel {
+  id?: string;
+  userId: string;
+  cycleId?: string;
+  entryDate: string;
+  mood: string;
+  flowIntensity: string;
+  notes?: string;
+  physicalSymptoms?: string;
+  createdAt?: string;
+}
+
+export interface InsightModel {
+  id?: string;
+  userId: string;
+  type: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface ReminderModel {
+  id?: string;
+  userId: string;
+  reminderType: string;
+  reminderDate: string;
+  isEnabled?: boolean;
+  createdAt?: string;
+}
+
 export interface DoctorInquiry {
   id: string;
   doctorId: string;
