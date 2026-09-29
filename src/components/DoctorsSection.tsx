@@ -206,6 +206,24 @@ export const DoctorsSection: React.FC = () => {
     }, 3000);
   };
 
+  // Desktop subtle cursor-responsive parallax
+  const [mouseTilt, setMouseTilt] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only apply on non-touch and when user has not requested reduced motion
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const xRatio = (e.clientX - rect.left) / rect.width - 0.5; // -0.5 to 0.5
+    const yRatio = (e.clientY - rect.top) / rect.height - 0.5;
+    setMouseTilt({ x: xRatio * 6, y: -yRatio * 6 }); // subtle 3-6 degree tilt
+  };
+
+  const handleMouseLeave = () => {
+    setMouseTilt({ x: 0, y: 0 });
+  };
+
   return (
     <div className="space-y-6">
       {/* Toast Notification */}
@@ -245,12 +263,15 @@ export const DoctorsSection: React.FC = () => {
         </div>
       </div>
 
-      {/* SWEEPABLE DOCTOR CARD STACK */}
+      {/* SWEEPABLE DOCTOR CARD STACK WITH DESKTOP PARALLAX */}
       <div
         className="relative max-w-2xl mx-auto cursor-grab active:cursor-grabbing select-none"
+        style={{ perspective: 1000 }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
       >
         {/* Background Card Preview Effect */}
         <div className="absolute -top-3 inset-x-4 h-full bg-white/40 rounded-3xl -z-10 transform scale-[0.97] blur-[1px]" />
@@ -259,9 +280,15 @@ export const DoctorsSection: React.FC = () => {
         {/* Active Sweeping Card */}
         <div
           style={{
-            transform: dragOffset !== 0 ? `translateX(${dragOffset}px) rotate(${dragOffset * 0.04}deg)` : undefined,
+            transform:
+              dragOffset !== 0
+                ? `translateX(${dragOffset}px) rotate(${dragOffset * 0.04}deg)`
+                : mouseTilt.x !== 0 || mouseTilt.y !== 0
+                ? `rotateY(${mouseTilt.x}deg) rotateX(${mouseTilt.y}deg)`
+                : undefined,
+            transition: dragOffset === 0 ? 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)' : undefined,
           }}
-          className={`glass-card p-6 sm:p-8 rounded-3xl space-y-6 transition-all duration-300 ${
+          className={`glass-card p-6 sm:p-8 rounded-3xl space-y-6 ${
             isAnimating ? 'opacity-80 scale-95' : 'opacity-100 scale-100'
           }`}
         >

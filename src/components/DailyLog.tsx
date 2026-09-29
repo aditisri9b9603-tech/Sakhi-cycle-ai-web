@@ -190,7 +190,7 @@ export const DailyLog: React.FC = () => {
               {user ? (
                 <span className="px-2 py-0.5 rounded-full bg-[#F3FAF5] text-[#226947] font-semibold text-[11px] border border-[#BFE7D0] inline-flex items-center gap-1">
                   <CheckCircle className="w-3 h-3 text-[#58B988]" />
-                  <span>Firebase Connected</span>
+                  <span>Cloud Connected</span>
                 </span>
               ) : (
                 <span className="px-2 py-0.5 rounded-full bg-[#FFF8F8] text-[#7E5265] font-medium text-[11px] border border-[#F4D5DC]">
@@ -202,9 +202,9 @@ export const DailyLog: React.FC = () => {
               {syncStatus === 'syncing' || isManualSyncing
                 ? 'Syncing entries to cloud...'
                 : syncStatus === 'synced'
-                ? `All logs securely backed up in Firestore (${lastSyncedTime ? `Last synced at ${lastSyncedTime}` : 'Up to date'})`
+                ? `All logs securely backed up in cloud database (${lastSyncedTime ? `Last synced at ${lastSyncedTime}` : 'Up to date'})`
                 : user
-                ? 'Ready to sync with Firebase'
+                ? 'Connected to authenticated cloud storage'
                 : 'Sign in to automatically sync your logs across all devices.'}
             </div>
           </div>

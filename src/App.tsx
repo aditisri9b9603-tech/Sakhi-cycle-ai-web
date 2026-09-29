@@ -15,6 +15,7 @@ import { PartnerSection } from './components/PartnerSection';
 import { VibesSection } from './components/VibesSection';
 import { SettingsSection } from './components/SettingsSection';
 import { WorkspaceHub } from './components/WorkspaceHub';
+import { PlansSection } from './components/PlansSection';
 import { SakhiAIChat } from './components/SakhiAIChat';
 import { calculateCycleStatus, PHASE_COLORS } from './utils/cycleCalculations';
 import { getTranslation } from './utils/translations';
@@ -416,7 +417,10 @@ const MainLayout: React.FC = () => {
             {/* 6. WORKSPACE INTEGRATION SECTION (Gmail, Chat, Forms) */}
             {activeSection === 'workspace' && <WorkspaceHub />}
 
-            {/* 7. SETTINGS SECTION */}
+            {/* 7. PLANS & SUBSCRIPTIONS SECTION */}
+            {activeSection === 'plans' && <PlansSection />}
+
+            {/* 8. SETTINGS SECTION */}
             {activeSection === 'settings' && <SettingsSection />}
           </>
         )}
@@ -455,7 +459,7 @@ const MainLayout: React.FC = () => {
           <span>Sakhi Cycle</span>
         </div>
         <p className="max-w-md mx-auto text-[11px] leading-relaxed">
-          Understand • Track • Thrive. Protected by Firebase cloud persistence, Google Workspace integration, and compassionate privacy standards.
+          Understand • Track • Thrive. Protected by persistent cloud sync, Google OAuth, and compassionate medical privacy standards.
         </p>
         <div className="pt-2 text-[10px] text-[#7E5265]/70">
           Not intended as a substitute for professional medical advice, diagnosis, or clinical treatment.

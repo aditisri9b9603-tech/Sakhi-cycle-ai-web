@@ -168,8 +168,8 @@ export const SettingsSection: React.FC = () => {
         </div>
       </form>
 
-      {/* Cloud & Database Connectivity Status */}
-      <div className="p-6 bg-white/95 rounded-3xl border border-[#F4D5DC] shadow-xs space-y-3">
+      {/* Cloud & Database Architecture Status */}
+      <div className="p-6 bg-white/95 rounded-3xl border border-[#F4D5DC] shadow-xs space-y-4">
         <div className="flex items-center gap-2 text-sm font-bold text-[#3D1E28]">
           <Database className="w-4 h-4 text-[#D9658B]" />
           <span>Cloud & Database Architecture</span>
@@ -177,15 +177,30 @@ export const SettingsSection: React.FC = () => {
 
         <div className="p-4 rounded-2xl bg-[#FFF8F8] border border-[#F4D5DC] flex items-start gap-3">
           <div className="w-8 h-8 rounded-full bg-white border border-[#F4D5DC] flex items-center justify-center text-sm shrink-0">
-            ☁️
+            ⚡
           </div>
-          <div className="space-y-1 text-xs text-[#7E5265]">
+          <div className="space-y-1.5 text-xs text-[#7E5265]">
             <div className="font-bold text-[#3D1E28]">
-              Firebase Cloud Firestore & Authentication
+              Supabase Authentication & Persistent Cloud Storage
             </div>
             <p className="leading-relaxed">
-              Your cycle history, symptom check-ins, and companion settings synchronize seamlessly with Firebase Cloud Firestore. When signed in, any updates on any device persist under your private user document (<code className="bg-white/80 px-1 py-0.5 rounded text-[10px] text-[#D9658B]">users/{'{userId}'}</code>) guarded by strict security rules.
+              Sakhi Cycle uses client-side Supabase authentication and persistent cloud storage. Sessions automatically refresh and persist across browser reloads using <code className="bg-white/80 px-1 py-0.5 rounded text-[10px] text-[#D9658B]">VITE_SUPABASE_URL</code> and <code className="bg-white/80 px-1 py-0.5 rounded text-[10px] text-[#D9658B]">VITE_SUPABASE_ANON_KEY</code>.
             </p>
+          </div>
+        </div>
+
+        {/* OAuth Redirect URLs Reference */}
+        <div className="p-4 rounded-2xl bg-[#FCECEF]/40 border border-[#F4D5DC] space-y-2">
+          <div className="text-xs font-bold text-[#3D1E28]">
+            Google OAuth & Supabase Redirect URLs
+          </div>
+          <p className="text-[11px] text-[#7E5265] leading-relaxed">
+            Ensure the following Redirect URLs are added to your Supabase Dashboard (<span className="font-semibold text-[#3D1E28]">Authentication → URL Configuration</span>):
+          </p>
+          <div className="space-y-1 font-mono text-[10px] text-[#3D1E28] bg-white/90 p-2.5 rounded-xl border border-[#F4D5DC]">
+            <div>• http://localhost:3000/</div>
+            <div>• https://sakhi-cycle-ai-lxgq9jbfm-aditisri9b9603-4457s-projects.vercel.app/</div>
+            <div>• {typeof window !== 'undefined' ? window.location.origin : 'Current AI Studio preview domain'}</div>
           </div>
         </div>
       </div>

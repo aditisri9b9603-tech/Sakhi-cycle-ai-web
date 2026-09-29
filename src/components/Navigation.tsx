@@ -26,6 +26,7 @@ import {
   User as UserIcon,
   Loader2,
   AlertCircle,
+  Crown,
 } from 'lucide-react';
 import { IMAGES } from '../assets/images';
 
@@ -68,6 +69,7 @@ export const Navigation: React.FC = () => {
     { id: 'community', label: t('navCommunity'), icon: Users, defaultSub: 'forum' },
     { id: 'vibes', label: t('navVibes'), icon: Sparkles, defaultSub: 'playlists' },
     { id: 'workspace', label: 'Workspace', icon: Mail, defaultSub: 'gmail' },
+    { id: 'plans', label: 'Plans', icon: Crown },
   ];
 
   const subSections: Record<string, { id: string; label: string; icon: any }[]> = {
@@ -461,7 +463,7 @@ export const Navigation: React.FC = () => {
             )}
 
             <p className="text-[11px] text-[#7E5265]/80 pt-1">
-              Protected by Firebase Cloud Storage with strict private security rules.
+              Secured with authenticated cloud database storage and privacy encryption.
             </p>
           </div>
         </div>
@@ -546,7 +548,7 @@ export const Navigation: React.FC = () => {
       )}
 
       {/* Mobile Bottom Navigation Bar (Thumb Zone) */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur-xl border-t border-[#F4D5DC] h-16 grid grid-cols-6 items-center px-1 pb-safe shadow-lg">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 backdrop-blur-xl border-t border-[#F4D5DC] h-16 grid grid-cols-7 items-center px-1 pb-safe shadow-lg">
         {topNavLinks.map((link) => {
           const Icon = link.icon;
           const isActive = activeSection === link.id && !partnerModeActive;
