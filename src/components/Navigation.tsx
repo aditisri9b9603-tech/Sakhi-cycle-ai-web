@@ -27,6 +27,10 @@ import {
   Loader2,
   AlertCircle,
   Crown,
+  Phone,
+  Smartphone,
+  UserPlus,
+  KeyRound,
 } from 'lucide-react';
 import { IMAGES } from '../assets/images';
 
@@ -56,14 +60,21 @@ export const Navigation: React.FC = () => {
     signInWithGoogle,
     signInAsGuest,
     signInWithEmail,
+    registerWithEmail,
+    signInWithPhone,
+    verifyPhoneOtp,
+    phoneConfirmationPending,
     logout,
   } = useAuth();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<'options' | 'email'>('options');
+  const [authMode, setAuthMode] = useState<'options' | 'email' | 'register' | 'phone'>('options');
   const [emailInput, setEmailInput] = useState('');
   const [passInput, setPassInput] = useState('');
+  const [nameInput, setNameInput] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
+  const [otpInput, setOtpInput] = useState('');
 
   const t = (key: string, params?: Record<string, string | number>) =>
     getTranslation(language, key, params);
@@ -409,7 +420,8 @@ export const Navigation: React.FC = () => {
             )}
 
             {authMode === 'options' ? (
-              <div className="space-y-3 pt-2">
+              <div className="space-y-2.5 pt-2">
+                {/* 1. Google Sign-In */}
                 <button
                   onClick={handleGoogleClick}
                   disabled={isSigningIn}
@@ -428,15 +440,17 @@ export const Navigation: React.FC = () => {
                   <span>Continue with Google</span>
                 </button>
 
+                {/* 2. Phone Authentication */}
                 <button
-                  onClick={handleGuestClick}
-                  disabled={isSigningIn}
-                  className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-[#FFF5F7] hover:bg-[#FCECEF] text-[#D9658B] border border-[#F4D5DC] rounded-2xl text-xs font-bold transition-all active:scale-[0.98] disabled:opacity-70"
+                  type="button"
+                  onClick={() => setAuthMode('phone')}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-[#FFF8F8] hover:bg-[#FFF0F3] text-[#7E5265] border border-[#F4D5DC] rounded-2xl text-xs font-semibold transition-all"
                 >
-                  <UserIcon className="w-4 h-4" />
-                  <span>Instant Guest Mode (Cloud Sync)</span>
+                  <Smartphone className="w-3.5 h-3.5 text-[#D9658B]" />
+                  <span>Sign In with Mobile Phone (SMS OTP)</span>
                 </button>
 
+                {/* 3. Email & Password */}
                 <button
                   type="button"
                   onClick={() => setAuthMode('email')}
@@ -445,8 +459,117 @@ export const Navigation: React.FC = () => {
                   <Mail className="w-3.5 h-3.5" />
                   <span>Sign In with Email & Password</span>
                 </button>
+
+                {/* 4. Instant Guest */}
+                <button
+                  onClick={handleGuestClick}
+                  disabled={isSigningIn}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-[#FFF5F7] hover:bg-[#FCECEF] text-[#D9658B] border border-[#F4D5DC] rounded-2xl text-xs font-bold transition-all active:scale-[0.98] disabled:opacity-70"
+                >
+                  <UserIcon className="w-3.5 h-3.5" />
+                  <span>Instant Guest Mode</span>
+                </button>
               </div>
-            ) : (
+            ) : authMode === 'phone' ? (
+              /* Phone Authentication Form */
+              <div className="space-y-3 pt-2 text-left">
+                {!phoneConfirmationPending ? (
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!phoneInput) return;
+                      await signInWithPhone(phoneInput);
+                    }}
+                    className="space-y-3"
+                  >
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#7E5265] mb-1">
+                        Mobile Phone Number
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="tel"
+                          required
+                          value={phoneInput}
+                          onChange={(e) => setPhoneInput(e.target.value)}
+                          placeholder="+91 98765 43210"
+                          className="w-full px-3 py-2 text-xs rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-1 focus:ring-[#D9658B]"
+                        />
+                      </div>
+                      <p className="text-[10px] text-[#7E5265] mt-1">
+                        Include your country code (e.g. +91 for India, +1 for US).
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setAuthMode('options')}
+                        className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#7E5265] bg-slate-100 hover:bg-slate-200"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSigningIn || !phoneInput}
+                        className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-[#D9658B] hover:bg-[#C54E74] shadow-xs disabled:opacity-60 flex items-center justify-center gap-1.5"
+                      >
+                        {isSigningIn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Phone className="w-3.5 h-3.5" />}
+                        <span>Send SMS Code</span>
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!otpInput) return;
+                      const ok = await verifyPhoneOtp(otpInput);
+                      if (ok) {
+                        setAuthModalOpen(false);
+                        setAuthMode('options');
+                        setOtpInput('');
+                      }
+                    }}
+                    className="space-y-3"
+                  >
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#7E5265] mb-1">
+                        Enter 6-Digit SMS Verification Code
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={6}
+                        required
+                        value={otpInput}
+                        onChange={(e) => setOtpInput(e.target.value)}
+                        placeholder="123456"
+                        className="w-full px-3 py-2 text-center text-sm font-mono tracking-widest rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-1 focus:ring-[#D9658B]"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setAuthMode('options')}
+                        className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#7E5265] bg-slate-100 hover:bg-slate-200"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSigningIn || otpInput.length < 6}
+                        className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-[#D9658B] hover:bg-[#C54E74] shadow-xs disabled:opacity-60 flex items-center justify-center gap-1.5"
+                      >
+                        {isSigningIn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                        <span>Verify & Sign In</span>
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            ) : authMode === 'email' ? (
+              /* Email Sign-In Form */
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
@@ -492,9 +615,84 @@ export const Navigation: React.FC = () => {
                   <button
                     type="submit"
                     disabled={isSigningIn}
-                    className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-[#D9658B] hover:bg-[#C54E74] shadow-xs disabled:opacity-60"
+                    className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-[#D9658B] hover:bg-[#C54E74] shadow-xs disabled:opacity-60 flex items-center justify-center gap-1.5"
                   >
-                    {isSigningIn ? 'Signing In...' : 'Sign In / Register'}
+                    {isSigningIn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                    <span>Sign In</span>
+                  </button>
+                </div>
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setAuthMode('register')}
+                    className="text-xs text-[#D9658B] hover:underline font-medium"
+                  >
+                    Need an account? Create one with Email →
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* Register Form */
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!emailInput || !passInput) return;
+                  const ok = await registerWithEmail(emailInput, passInput, nameInput);
+                  if (ok) {
+                    setAuthModalOpen(false);
+                    setAuthMode('options');
+                  }
+                }}
+                className="space-y-3 pt-2 text-left"
+              >
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#7E5265] mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    placeholder="Aditi Sharma"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-1 focus:ring-[#D9658B]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#7E5265] mb-1">Email</label>
+                  <input
+                    type="email"
+                    required
+                    value={emailInput}
+                    onChange={(e) => setEmailInput(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-1 focus:ring-[#D9658B]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#7E5265] mb-1">Password (6+ characters)</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={passInput}
+                    onChange={(e) => setPassInput(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-1 focus:ring-[#D9658B]"
+                  />
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setAuthMode('email')}
+                    className="flex-1 py-2 rounded-xl text-xs font-semibold text-[#7E5265] bg-slate-100 hover:bg-slate-200"
+                  >
+                    Back to Sign In
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSigningIn}
+                    className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-[#D9658B] hover:bg-[#C54E74] shadow-xs disabled:opacity-60 flex items-center justify-center gap-1.5"
+                  >
+                    {isSigningIn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+                    <span>Create Account</span>
                   </button>
                 </div>
               </form>

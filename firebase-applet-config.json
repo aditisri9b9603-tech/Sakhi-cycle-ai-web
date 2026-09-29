@@ -1,11 +1,11 @@
 {
-  "projectId": "river-mediator-m7krv",
-  "appId": "1:209019176844:web:2c44273d59c42ec5bef8a9",
+  "projectId": "sakhi-cycle-ai-web",
+  "appId": "1:13620307555:web:74b8e2f367a2e71e03ba56",
   "apiKey": "AIzaSyDwcbvE1TdqmtGQMzAAaX9dRxqeZyHjcUo",
-  "authDomain": "river-mediator-m7krv.firebaseapp.com",
+  "authDomain": "sakhi-cycle-ai-web.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-sakhicycleaiweb-e444fa5a-f998-4c79-a963-f7d8b7624415",
-  "storageBucket": "river-mediator-m7krv.firebasestorage.app",
-  "messagingSenderId": "209019176844",
+  "storageBucket": "sakhi-cycle-ai-web.firebasestorage.app",
+  "messagingSenderId": "13620307555",
   "measurementId": "",
   "oAuthClientId": "209019176844-7b0o3jp1mhjqt6hbfnsmjua3t42scjsj.apps.googleusercontent.com",
   "recaptchaSiteKey": ""

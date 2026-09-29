@@ -18,6 +18,7 @@ import { WorkspaceHub } from './components/WorkspaceHub';
 import { PlansSection } from './components/PlansSection';
 import { SakhiAIChat } from './components/SakhiAIChat';
 import { SplashLoader } from './components/SplashLoader';
+import { Login } from './components/Login';
 import { calculateCycleStatus, PHASE_COLORS } from './utils/cycleCalculations';
 import { getTranslation } from './utils/translations';
 import { IMAGES } from './assets/images';
@@ -426,6 +427,13 @@ const MainLayout: React.FC = () => {
 
             {/* 8. SETTINGS SECTION */}
             {activeSection === 'settings' && <SettingsSection />}
+
+            {/* 9. LOGIN SECTION */}
+            {activeSection === 'login' && (
+              <div className="py-6 flex items-center justify-center">
+                <Login redirectTo="home" />
+              </div>
+            )}
           </>
         )}
       </main>
