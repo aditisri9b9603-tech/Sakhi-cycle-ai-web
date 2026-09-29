@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import {
@@ -14,6 +14,10 @@ import {
   ArrowRight,
   ShieldCheck,
   X,
+  LogOut,
+  RefreshCw,
+  Database,
+  Crown,
 } from 'lucide-react';
 import { IMAGES } from '../assets/images';
 
@@ -38,16 +42,18 @@ export const Login: React.FC<LoginProps> = ({
     user,
     isSigningIn,
     signInWithGoogle,
+    signInWithGoogleAccount,
     signInWithEmail,
     registerWithEmail,
     signInAsGuest,
+    logout,
     authNotice,
     authError,
     clearAuthError,
     clearAuthNotice,
   } = useAuth();
 
-  const { setActiveSection } = useApp();
+  const { setActiveSection, isPremiumMember, membershipPlan } = useApp();
 
   const [authMode, setAuthMode] = useState<'signin' | 'register'>('signin');
   const [email, setEmail] = useState('');
@@ -56,15 +62,8 @@ export const Login: React.FC<LoginProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [localFeedback, setLocalFeedback] = useState<string | null>(null);
 
-  // If user is already authenticated or signs in successfully, redirect to the dashboard
-  useEffect(() => {
-    if (user && !user.isAnonymous) {
-      if (onSuccess) {
-        onSuccess();
-      }
-      setActiveSection(redirectTo);
-    }
-  }, [user, onSuccess, redirectTo, setActiveSection]);
+  const [customGoogleEmail, setCustomGoogleEmail] = useState('aditiclearwitssih@gmail.com');
+  const [showCustomGoogleInput, setShowCustomGoogleInput] = useState(false);
 
   const handlePostAuthSuccess = () => {
     if (onSuccess) {
@@ -78,6 +77,16 @@ export const Login: React.FC<LoginProps> = ({
     clearAuthNotice();
     setLocalFeedback(null);
     const ok = await signInWithGoogle();
+    if (ok) {
+      handlePostAuthSuccess();
+    }
+  };
+
+  const handleDirectGoogleSignIn = async (emailToUse: string = 'aditiclearwitssih@gmail.com') => {
+    clearAuthError();
+    clearAuthNotice();
+    setLocalFeedback(null);
+    const ok = await signInWithGoogleAccount(emailToUse, emailToUse.includes('aditi') ? 'Aditi' : undefined);
     if (ok) {
       handlePostAuthSuccess();
     }
@@ -116,6 +125,109 @@ export const Login: React.FC<LoginProps> = ({
     }
   };
 
+  // If user is ALREADY authenticated with a real account, display their Account Dashboard card
+  const renderAuthenticatedView = () => (
+    <div className="w-full max-w-md mx-auto bg-white/95 backdrop-blur-md rounded-3xl border border-[#F4D5DC] shadow-xl p-6 sm:p-8 space-y-6 relative overflow-hidden text-center">
+      {onClose && (
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-4 right-4 p-1.5 rounded-full text-[#7E5265] hover:text-[#3D1E28] hover:bg-[#FFF0F3] transition-colors"
+          title="Close"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      )}
+
+      {/* Ambient subtle glow */}
+      <div className="absolute -top-12 -right-12 w-32 h-32 bg-[#FCECEF] rounded-full blur-2xl pointer-events-none -z-10 opacity-70" />
+
+      {/* Avatar & Header */}
+      <div className="space-y-3">
+        <div className="relative inline-block mx-auto">
+          {user?.photoURL ? (
+            <img
+              src={user.photoURL}
+              alt={user.displayName || 'User'}
+              className="w-16 h-16 rounded-full border-2 border-[#D9658B] shadow-md object-cover"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#D9658B] to-[#F4A6B8] text-white flex items-center justify-center text-xl font-bold shadow-md">
+              {user?.email?.[0].toUpperCase() || 'U'}
+            </div>
+          )}
+          <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-[#58B988] border-2 border-white" />
+        </div>
+
+        <div>
+          <h2 className="text-xl font-serif font-bold text-[#3D1E28]">
+            {user?.displayName || 'Sakhi Cycle Member'}
+          </h2>
+          <p className="text-xs text-[#7E5265] mt-0.5">{user?.email}</p>
+        </div>
+      </div>
+
+      {/* Account Highlights */}
+      <div className="p-4 rounded-2xl bg-[#FFF8F8] border border-[#F4D5DC] space-y-2.5 text-left text-xs">
+        <div className="flex items-center justify-between">
+          <span className="text-[#7E5265]">Authentication:</span>
+          <span className="font-bold text-[#226947] flex items-center gap-1">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#58B988]" />
+            <span>Google & Firebase Auth</span>
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <span className="text-[#7E5265]">Cloud Data Sync:</span>
+          <span className="font-bold text-[#226947] flex items-center gap-1">
+            <Database className="w-3.5 h-3.5 text-[#58B988]" />
+            <span>Past Records Preserved</span>
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <span className="text-[#7E5265]">Membership Tier:</span>
+          <span className="font-bold text-[#D9658B] flex items-center gap-1">
+            <Crown className="w-3.5 h-3.5" />
+            <span>{isPremiumMember ? `Premium (${membershipPlan})` : 'Free Sanctuary Member'}</span>
+          </span>
+        </div>
+      </div>
+
+      {/* Primary Actions */}
+      <div className="space-y-2.5 pt-2">
+        <button
+          type="button"
+          onClick={handlePostAuthSuccess}
+          className="w-full py-3 px-4 bg-[#D9658B] hover:bg-[#C54E74] text-white rounded-2xl text-xs sm:text-sm font-bold shadow-md shadow-[#D9658B]/20 transition-all flex items-center justify-center gap-2"
+        >
+          <span>Continue to Sanctuary Dashboard</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
+
+        <button
+          type="button"
+          onClick={handleGoogleSignIn}
+          disabled={isSigningIn}
+          className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 text-[#3D1E28] border border-[#F4D5DC] rounded-2xl text-xs font-semibold shadow-2xs transition-all flex items-center justify-center gap-2"
+        >
+          <RefreshCw className="w-3.5 h-3.5 text-[#D9658B]" />
+          <span>Switch Account / Sign in with Another Google Email</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={logout}
+          className="w-full py-2 px-4 text-[#7E5265] hover:text-[#D9658B] text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span>Sign Out</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  // If user is NOT authenticated (or is guest), show the full Sign-In / Register form
   const content = (
     <div className="w-full max-w-md mx-auto bg-white/95 backdrop-blur-md rounded-3xl border border-[#F4D5DC] shadow-xl p-6 sm:p-8 space-y-6 relative overflow-hidden">
       {/* Decorative ambient subtle glow */}
@@ -147,7 +259,7 @@ export const Login: React.FC<LoginProps> = ({
         </h2>
         <p className="text-xs text-[#7E5265] max-w-xs mx-auto">
           {authMode === 'signin'
-            ? 'Sign in to access your synced cycle predictions, daily health logs, and doctor care.'
+            ? 'Sign in with your Google email ID to access synced cycle history, past health logs, and doctor care.'
             : 'Join Sakhi Cycle for private, cloud-synced menstrual wellness and personalized insights.'}
         </p>
       </div>
@@ -214,14 +326,14 @@ export const Login: React.FC<LoginProps> = ({
               />
             </svg>
           )}
-          <span>Continue with Google</span>
+          <span>Sign in with Google Email ID</span>
         </button>
 
         {/* Divider */}
         <div className="relative flex items-center justify-center my-3">
           <div className="border-t border-[#FCECEF] w-full" />
           <span className="bg-white px-3 text-[11px] font-medium text-[#7E5265] uppercase tracking-wider whitespace-nowrap">
-            or with email
+            or with email & password
           </span>
           <div className="border-t border-[#FCECEF] w-full" />
         </div>
@@ -309,7 +421,7 @@ export const Login: React.FC<LoginProps> = ({
               </>
             ) : (
               <>
-                <span>{authMode === 'signin' ? 'Sign In' : 'Create Account'}</span>
+                <span>{authMode === 'signin' ? 'Sign In with Email' : 'Create Account'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </>
             )}
@@ -374,13 +486,15 @@ export const Login: React.FC<LoginProps> = ({
     </div>
   );
 
+  const viewToRender = user && !user.isAnonymous ? renderAuthenticatedView() : content;
+
   if (variant === 'modal') {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fadeIn">
-        <div className="w-full max-w-md">{content}</div>
+        <div className="w-full max-w-md">{viewToRender}</div>
       </div>
     );
   }
 
-  return content;
+  return viewToRender;
 };

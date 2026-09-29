@@ -229,7 +229,11 @@ export const Navigation: React.FC = () => {
 
             {/* Google / Guest User Profile or Sign-In button */}
             {user ? (
-              <div className="flex items-center gap-2 bg-white/95 px-2.5 py-1 rounded-full border border-[#F4D5DC] shadow-xs">
+              <div
+                onClick={() => handleNavClick('login')}
+                className="flex items-center gap-2 bg-white/95 px-2.5 py-1 rounded-full border border-[#F4D5DC] shadow-xs cursor-pointer hover:border-[#D9658B] hover:bg-[#FFF5F7] transition-all"
+                title="View Account & Cloud Sync Status"
+              >
                 {user.photoURL ? (
                   <img
                     src={user.photoURL}
@@ -245,7 +249,10 @@ export const Navigation: React.FC = () => {
                   {user.isAnonymous ? 'Guest' : (user.displayName?.split(' ')[0] || 'User')}
                 </span>
                 <button
-                  onClick={logout}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    logout();
+                  }}
                   className="text-[10px] text-[#7E5265] hover:text-[#D9658B] ml-1 p-0.5"
                   title="Sign Out"
                 >
@@ -254,7 +261,7 @@ export const Navigation: React.FC = () => {
               </div>
             ) : (
               <button
-                onClick={() => setAuthModalOpen(true)}
+                onClick={() => handleNavClick('login')}
                 disabled={isSigningIn}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white hover:bg-slate-50 text-xs font-bold text-[#3D1E28] border border-slate-200 shadow-2xs transition-all active:scale-95 disabled:opacity-70"
               >
@@ -468,6 +475,18 @@ export const Navigation: React.FC = () => {
                 >
                   <UserIcon className="w-3.5 h-3.5" />
                   <span>Instant Guest Mode</span>
+                </button>
+
+                {/* 5. Go to full sign-in page */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthModalOpen(false);
+                    handleNavClick('login');
+                  }}
+                  className="w-full pt-1 text-[11px] text-[#7E5265] hover:text-[#D9658B] hover:underline font-semibold"
+                >
+                  Open Dedicated Sign In Page →
                 </button>
               </div>
             ) : authMode === 'phone' ? (

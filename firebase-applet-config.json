@@ -1,12 +1,12 @@
 {
-  "projectId": "sakhi-cycle-ai-web",
-  "appId": "1:13620307555:web:74b8e2f367a2e71e03ba56",
-  "apiKey": "AIzaSyDwcbvE1TdqmtGQMzAAaX9dRxqeZyHjcUo",
-  "authDomain": "sakhi-cycle-ai-web.firebaseapp.com",
+  "projectId": "gen-lang-client-0770370453",
+  "appId": "1:306200444194:web:839de53362c933dfa4397b",
+  "apiKey": "AIzaSyDdoCb7kUqW2jq9oA7u-q9foyIp14uzFqI",
+  "authDomain": "gen-lang-client-0770370453.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-sakhicycleaiweb-e444fa5a-f998-4c79-a963-f7d8b7624415",
-  "storageBucket": "sakhi-cycle-ai-web.firebasestorage.app",
-  "messagingSenderId": "13620307555",
+  "storageBucket": "gen-lang-client-0770370453.firebasestorage.app",
+  "messagingSenderId": "306200444194",
   "measurementId": "",
-  "oAuthClientId": "209019176844-7b0o3jp1mhjqt6hbfnsmjua3t42scjsj.apps.googleusercontent.com",
+  "oAuthClientId": "306200444194-kib1dompi1mkenkdcvt8751ku0t2ssca.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

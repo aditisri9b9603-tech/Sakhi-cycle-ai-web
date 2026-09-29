@@ -19,6 +19,7 @@ import { PlansSection } from './components/PlansSection';
 import { SakhiAIChat } from './components/SakhiAIChat';
 import { SplashLoader } from './components/SplashLoader';
 import { Login } from './components/Login';
+import { DailyWellnessAffirmation } from './components/DailyWellnessAffirmation';
 import { calculateCycleStatus, PHASE_COLORS } from './utils/cycleCalculations';
 import { getTranslation } from './utils/translations';
 import { IMAGES } from './assets/images';
@@ -158,6 +159,9 @@ const MainLayout: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Rotating Daily Wellness Affirmation Card */}
+                <DailyWellnessAffirmation />
 
                 {/* Today's Status & Interactive Cycle Ring Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

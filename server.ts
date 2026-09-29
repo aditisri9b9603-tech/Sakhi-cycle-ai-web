@@ -71,10 +71,22 @@ const ai = new GoogleGenAI({
   },
 });
 
-// Server-side Sakhi AI endpoint
+// Server-side Sakhi AI endpoint with model selection & authentication context
 app.post('/api/gemini/chat', async (req, res) => {
   try {
-    const { message, phase, recentSymptoms, language = 'en', history = [] } = req.body;
+    const {
+      message,
+      phase,
+      currentDay,
+      totalDays,
+      recentSymptoms,
+      language = 'en',
+      history = [],
+      model = 'gemini-3.5-flash',
+      userId,
+      userEmail,
+      displayName,
+    } = req.body;
 
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'Message is required' });
@@ -86,27 +98,42 @@ app.post('/api/gemini/chat', async (req, res) => {
       });
     }
 
-    const systemInstruction = `You are "Sakhi", a compassionate, culturally sensitive, and scientifically grounded women's menstrual wellness companion.
-You speak in a warm, comforting, respectful tone like a supportive elder sister or caring confidante.
+    // Determine target model (avoid exhausted gemini-3.8-flash quota by preferring gemini-3.5-flash)
+    let targetModel = 'gemini-3.5-flash';
+    if (model === 'gemini-3.1-flash-lite') {
+      targetModel = 'gemini-3.1-flash-lite';
+    } else if (model === 'gemini-3.1-pro-preview') {
+      targetModel = 'gemini-3.1-pro-preview';
+    } else {
+      targetModel = 'gemini-3.5-flash';
+    }
+
+    // Determine caller auth state
+    const authHeader = req.headers.authorization;
+    const isAuthenticated = Boolean(authHeader || (userId && !String(userId).startsWith('guest_')));
+    const userName = displayName || (userEmail ? userEmail.split('@')[0] : '');
+
+    const systemInstruction = `You are "Sakhi", a compassionate, culturally sensitive, and scientifically grounded women's menstrual wellness companion and cycle guide.
+You speak in a warm, comforting, respectful tone like a supportive elder sister, caring confidante, or empathetic wellness mentor.
+${userName ? `The user is authenticated as ${userName}. Greet or acknowledge them warmly.` : ''}
 
 CRITICAL MEDICAL BOUNDARIES:
-- You are a wellness guide, NOT a doctor. You never diagnose illnesses, prescribe pharmaceutical medications, or replace medical advice.
-- Always include a gentle disclaimer when discussing symptoms.
-- EMERGENCY PROTOCOL: If the user mentions red-flag symptoms such as severe, unbearable sharp pelvic pain, heavy bleeding soaking more than 2 pads per hour for hours, severe dizziness/fainting, high fever with pelvic tenderness, signs of ectopic pregnancy, or self-harm thoughts, you MUST immediately advise urgent emergency medical attention or visiting the nearest hospital casualty, and provide helpline suggestions.
+- You are a wellness guide, NOT a doctor. You never diagnose illnesses, prescribe pharmaceutical medications, or replace professional medical care.
+- Always include a gentle disclaimer when discussing symptoms or home remedies.
+- EMERGENCY PROTOCOL: If the user mentions red-flag symptoms such as severe, unbearable sharp pelvic pain, heavy bleeding soaking more than 2 pads per hour for consecutive hours, severe dizziness/fainting, high fever with pelvic tenderness, signs of ectopic pregnancy, or self-harm thoughts, you MUST immediately advise urgent emergency medical attention or visiting the nearest hospital casualty, and provide emergency helpline suggestions.
 
 CONTEXT:
-- User's current cycle phase: ${phase || 'Not specified'}
-- Recent logged symptoms: ${Array.isArray(recentSymptoms) ? recentSymptoms.join(', ') : 'None logged'}
+- User's current cycle phase: ${phase || 'Not specified'}${currentDay ? ` (Day ${currentDay} of ${totalDays || 28})` : ''}
+- Recent logged symptoms: ${Array.isArray(recentSymptoms) && recentSymptoms.length > 0 ? recentSymptoms.join(', ') : 'None logged'}
 - Output Language: ${language === 'hi' ? 'Hindi (in natural, empathetic Devanagari script, or easily readable Hinglish if appropriate, warm and respectful)' : 'Natural, warm English'}
 
 Provide actionable, soothing, and practical wellness suggestions (herbal teas, heating compresses, gentle stretches, rest, wholesome nutrition, breathing), while encouraging them to listen to their body. Keep replies concise, comforting, and structured with gentle bullet points where helpful.`;
 
-    // Construct contents
+    // Construct multi-turn contents preserving conversation thread
     const contents: any[] = [];
     
-    // Add brief conversation history if provided
     if (Array.isArray(history) && history.length > 0) {
-      for (const item of history.slice(-6)) {
+      for (const item of history.slice(-20)) {
         if (item.role === 'user' || item.role === 'model') {
           contents.push({
             role: item.role,
@@ -121,23 +148,142 @@ Provide actionable, soothing, and practical wellness suggestions (herbal teas, h
       parts: [{ text: message }],
     });
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: contents,
-      config: {
-        systemInstruction,
-        temperature: 0.7,
-        topP: 0.9,
-      },
-    });
+    let reply = '';
+    let isGrounded = false;
+    let searchQueries: string[] = [];
+    let sources: Array<{ title: string; url: string }> = [];
 
-    const reply = response.text || "I'm here for you. Take a deep, gentle breath and rest.";
-    return res.json({ reply });
+    // Use Search Grounding with gemini-3.5-flash per requirements
+    if (targetModel === 'gemini-3.5-flash') {
+      try {
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.5-flash',
+          contents: contents,
+          config: {
+            systemInstruction,
+            temperature: 0.7,
+            topP: 0.9,
+            tools: [{ googleSearch: {} }],
+          },
+        });
+
+        reply = response.text || "I'm here for you. Take a deep, gentle breath and rest.";
+        const metadata = response.candidates?.[0]?.groundingMetadata;
+        if (metadata) {
+          isGrounded = Boolean(
+            (metadata.webSearchQueries && metadata.webSearchQueries.length > 0) ||
+            (metadata.groundingChunks && metadata.groundingChunks.length > 0)
+          );
+          searchQueries = metadata.webSearchQueries || [];
+          if (Array.isArray(metadata.groundingChunks)) {
+            sources = metadata.groundingChunks
+              .map((chunk: any) => ({
+                title: chunk.web?.title || 'Verified Medical / Health Source',
+                url: chunk.web?.uri || '',
+              }))
+              .filter((s: any) => Boolean(s.url));
+          }
+        }
+      } catch (searchError: any) {
+        // Graceful fallback to ungrounded gemini-3.5-flash if search quota or tool is temporarily busy
+        console.warn('Google Search Grounding fallback triggered:', searchError?.message?.slice(0, 80));
+        const fallbackResponse = await ai.models.generateContent({
+          model: 'gemini-3.5-flash',
+          contents: contents,
+          config: {
+            systemInstruction,
+            temperature: 0.7,
+            topP: 0.9,
+          },
+        });
+        reply = fallbackResponse.text || "I'm here for you. Take a deep, gentle breath and rest.";
+      }
+    } else {
+      const response = await ai.models.generateContent({
+        model: targetModel,
+        contents: contents,
+        config: {
+          systemInstruction,
+          temperature: 0.7,
+          topP: 0.9,
+        },
+      });
+      reply = response.text || "I'm here for you. Take a deep, gentle breath and rest.";
+    }
+
+    return res.json({
+      reply,
+      modelUsed: targetModel,
+      authenticated: isAuthenticated,
+      groundedWithSearch: isGrounded,
+      searchQueries,
+      sources,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error: any) {
     console.error('Error in /api/gemini/chat:', error);
     return res.status(500).json({
       error: error.message || 'Failed to generate response from Sakhi AI',
     });
+  }
+});
+
+// Dedicated Google Search Grounded clinical wellness research endpoint
+app.post('/api/gemini/search-wellness', async (req, res) => {
+  try {
+    const { query } = req.body;
+    if (!query || typeof query !== 'string') {
+      return res.status(400).json({ error: 'Search query is required' });
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({ error: 'Gemini API key is not configured on the server.' });
+    }
+
+    const systemInstruction = `You are a clinical wellness research assistant specializing in verified women's menstrual health, hormonal biology, and gynecology.
+Provide up-to-date, evidence-grounded answers based on current medical consensus. Include clear bullet points and cite verified health authorities.`;
+
+    let reply = '';
+    let sources: Array<{ title: string; url: string }> = [];
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: query,
+        config: {
+          systemInstruction,
+          tools: [{ googleSearch: {} }],
+        },
+      });
+
+      reply = response.text || 'No findings available.';
+      const metadata = response.candidates?.[0]?.groundingMetadata;
+      if (metadata?.groundingChunks) {
+        sources = metadata.groundingChunks
+          .map((chunk: any) => ({
+            title: chunk.web?.title || 'Verified Medical Source',
+            url: chunk.web?.uri || '',
+          }))
+          .filter((s: any) => Boolean(s.url));
+      }
+    } catch {
+      const fallback = await ai.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: query,
+        config: { systemInstruction },
+      });
+      reply = fallback.text || 'No findings available.';
+    }
+
+    return res.json({
+      query,
+      answer: reply,
+      sources,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    console.error('Error in /api/gemini/search-wellness:', err);
+    return res.status(500).json({ error: err.message || 'Search failed' });
   }
 });
 

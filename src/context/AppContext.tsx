@@ -297,7 +297,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setCycleSettings(data);
           }
 
-          // Load Daily Logs
+          // Load Daily Logs and merge with local logs to ensure no past records are ever lost
           const logsColRef = collection(firestore, 'users', currentUserId, 'dailyLogs');
           const logsSnap = await getDocs(logsColRef);
           if (!isCancelled) {
@@ -306,9 +306,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const entry = docItem.data() as DailyLogEntry;
               cloudLogs[entry.date] = { ...entry, syncedToCloud: true };
             });
-            if (Object.keys(cloudLogs).length > 0) {
-              setDailyLogs(cloudLogs);
-            }
+            setDailyLogs((prev) => {
+              const merged = { ...prev, ...cloudLogs };
+              // Sync any un-synced local logs to Firestore in background
+              const activeDb = firestore;
+              if (activeDb) {
+                Object.entries(prev).forEach(([date, localEntry]) => {
+                  if (!cloudLogs[date]) {
+                    const logDoc = doc(activeDb, 'users', currentUserId, 'dailyLogs', date);
+                    setDoc(logDoc, { ...localEntry, userId: currentUserId, syncedToCloud: true }, { merge: true }).catch(() => {});
+                  }
+                });
+              }
+              return merged;
+            });
           }
 
           // Load User Profile (User entity)

@@ -152,12 +152,31 @@
         "createdAt": { "type": "string" }
       },
       "required": ["userId", "orderId", "paymentId", "planId", "amount", "status"]
+    },
+    "MembershipRecord": {
+      "title": "MembershipRecord",
+      "description": "Active premium membership state for user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "planId": { "type": "string" },
+        "status": { "type": "string" },
+        "amount": { "type": "number" },
+        "activatedAt": { "type": "string" },
+        "lastPaymentId": { "type": "string" },
+        "lastOrderId": { "type": "string" }
+      },
+      "required": ["userId", "planId", "status"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/User" },
       "description": "User profile document"
+    },
+    "/users/{userId}/membership/{memberId}": {
+      "schema": { "$ref": "#/entities/MembershipRecord" },
+      "description": "User membership tier and status"
     },
     "/users/{userId}/cycles/{cycleId}": {
       "schema": { "$ref": "#/entities/Cycle" },
