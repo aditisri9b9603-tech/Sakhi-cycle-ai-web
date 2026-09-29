@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   Language,
   CycleSettings,
@@ -9,7 +9,11 @@ import {
 } from '../types';
 import { formatDateToISO } from '../utils/cycleCalculations';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { firestore, isFirebaseConfigured } from '../lib/firebaseClient';
+import { doc, getDoc, setDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
+
+export type SyncStatusType = 'idle' | 'syncing' | 'synced' | 'local_only' | 'error';
 
 interface AppContextType {
   language: Language;
@@ -19,10 +23,10 @@ interface AppContextType {
   activeSubSection: string;
   setActiveSubSection: (sub: string) => void;
   cycleSettings: CycleSettings;
-  updateCycleSettings: (settings: Partial<CycleSettings>) => void;
+  updateCycleSettings: (settings: Partial<CycleSettings>) => Promise<boolean>;
   dailyLogs: Record<string, DailyLogEntry>; // keyed by YYYY-MM-DD
-  saveDailyLog: (entry: DailyLogEntry) => void;
-  deleteDailyLog: (date: string) => void;
+  saveDailyLog: (entry: DailyLogEntry) => Promise<boolean>;
+  deleteDailyLog: (date: string) => Promise<boolean>;
   getLogForDate: (date: string) => DailyLogEntry | undefined;
   partnerPermissions: PartnerPermissions;
   updatePartnerPermissions: (updates: Partial<PartnerPermissions>) => void;
@@ -38,14 +42,22 @@ interface AppContextType {
   setPartnerModeActive: (active: boolean) => void;
   selectedCalendarDate: string;
   setSelectedCalendarDate: (date: string) => void;
-  syncStatus: 'idle' | 'syncing' | 'synced' | 'local_only' | 'error';
+  syncStatus: SyncStatusType;
+  syncError: string | null;
   lastSyncedTime: string | null;
   syncAllLogsToCloud: () => Promise<boolean>;
+  retryFailedSync: () => Promise<boolean>;
+  isPremiumMember: boolean;
+  membershipPlan: 'monthly' | 'annual' | null;
+  activateMembership: (
+    planId: 'monthly' | 'annual',
+    details: { orderId: string; paymentId: string; amount: number }
+  ) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Helper for initial default date (e.g., 8 days ago)
+// Initial default cycle dates
 const today = new Date();
 const defaultStartDate = new Date(today);
 defaultStartDate.setDate(today.getDate() - 10);
@@ -79,258 +91,120 @@ const DEFAULT_BUDDY_PROFILE: BuddyProfile = {
   connectedSince: '2 days ago',
 };
 
-const getInitialLogs = (): Record<string, DailyLogEntry> => {
-  const logs: Record<string, DailyLogEntry> = {};
-  const now = new Date();
-
-  // Seed sample logs
-  for (let i = 0; i < 4; i++) {
-    const d = new Date(now);
-    d.setDate(now.getDate() - (10 - i));
-    const dateStr = formatDateToISO(d);
-    logs[dateStr] = {
-      date: dateStr,
-      flow: i === 0 ? 'heavy' : i === 1 ? 'medium' : 'light',
-      mood: i === 0 ? 'sensitive' : 'calm',
-      symptoms: i === 0 ? ['cramps', 'fatigue', 'backache'] : ['bloating'],
-      energy: i === 0 ? 2 : 4,
-      notes: i === 0 ? 'Warm chamomile tea and ginger heating compress helped soften the pelvic cramps.' : '',
-      waterGlasses: 8,
-      sleepHours: 8,
-      updatedAt: new Date().toISOString(),
-    };
-  }
-
-  return logs;
-};
-
-const INITIAL_FORUM_POSTS: ForumPost[] = [
-  {
-    id: 'post-1',
-    authorPseudonym: 'LotusSister_24',
-    authorAvatar: '🌸',
-    title: 'Switching to menstrual cups: what helped me finally feel comfortable',
-    content: 'For months I was intimidated by menstrual cups, but trying the "punch-down fold" in the shower made all the difference! Remember to boil it in clean water between cycles.',
-    category: 'wellness',
-    createdAt: '2026-09-26',
-    reactions: { heart: 28, helpful: 45, hug: 12 },
-    userReactions: { heart: true, helpful: true },
-    comments: [
-      {
-        id: 'c-1',
-        author: 'Marigold_11',
-        text: 'The punch down fold completely changed it for me too! So glad you shared this.',
-        createdAt: '2026-09-27',
-      },
-    ],
-  },
-  {
-    id: 'post-2',
-    authorPseudonym: 'ChaiAndCare_77',
-    authorAvatar: '☕',
-    title: 'My favorite seed cycling recipe for luteal phase balance',
-    content: 'During the luteal phase (after ovulation), I add 1 tbsp ground sunflower seeds and 1 tbsp sesame seeds to my morning warm oats. It has helped my luteal mood swings feel so much softer.',
-    category: 'nutrition',
-    createdAt: '2026-09-25',
-    reactions: { heart: 34, helpful: 52, hug: 18 },
-    userReactions: {},
-    comments: [
-      {
-        id: 'c-2',
-        author: 'JasmineSoul_09',
-        text: 'Do you grind them fresh or store them in the fridge?',
-        createdAt: '2026-09-26',
-      },
-    ],
-  },
-  {
-    id: 'post-3',
-    authorPseudonym: 'GracefulPebble_93',
-    authorAvatar: '🌿',
-    title: 'How Flo-style partner sharing helped my spouse understand my low-energy days',
-    content: 'We set up partner view so my husband only gets a gentle notification when I enter my luteal and menstrual phases. He started bringing me hot chamomile tea without me even having to ask!',
-    category: 'wellness',
-    createdAt: '2026-09-24',
-    reactions: { heart: 49, helpful: 38, hug: 29 },
-    userReactions: { hug: true },
-    comments: [],
-  },
-];
-
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, activeProvider } = useAuth();
 
   const [language, setLanguageState] = useState<Language>(() => {
     return (localStorage.getItem('sakhi_lang') as Language) || 'en';
   });
 
   const [activeSection, setActiveSection] = useState<string>('home');
-  const [activeSubSection, setActiveSubSection] = useState<string>('calendar');
+  const [activeSubSection, setActiveSubSection] = useState<string>('');
   const [partnerModeActive, setPartnerModeActive] = useState<boolean>(false);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string>(formatDateToISO(new Date()));
 
-  const [cycleSettings, setCycleSettings] = useState<CycleSettings>(() => {
-    const saved = localStorage.getItem('sakhi_cycle_settings');
-    return saved ? JSON.parse(saved) : DEFAULT_CYCLE_SETTINGS;
-  });
-
-  const [dailyLogs, setDailyLogs] = useState<Record<string, DailyLogEntry>>(() => {
-    const saved = localStorage.getItem('sakhi_daily_logs');
-    return saved ? JSON.parse(saved) : getInitialLogs();
-  });
-
-  const [partnerPermissions, setPartnerPermissions] = useState<PartnerPermissions>(() => {
-    const saved = localStorage.getItem('sakhi_partner_permissions');
-    return saved ? JSON.parse(saved) : DEFAULT_PARTNER_PERMISSIONS;
-  });
-
-  const [forumPosts, setForumPosts] = useState<ForumPost[]>(() => {
-    const saved = localStorage.getItem('sakhi_forum_posts');
-    return saved ? JSON.parse(saved) : INITIAL_FORUM_POSTS;
-  });
-
-  const [buddyProfile, setBuddyProfile] = useState<BuddyProfile>(() => {
-    const saved = localStorage.getItem('sakhi_buddy_profile');
-    return saved ? JSON.parse(saved) : DEFAULT_BUDDY_PROFILE;
-  });
-
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'local_only' | 'error'>('idle');
+  const [syncStatus, setSyncStatus] = useState<SyncStatusType>('idle');
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncedTime, setLastSyncedTime] = useState<string | null>(null);
 
-  // Sync all current logs to Supabase cloud if connected, or keep local state synchronized
-  const syncAllLogsToCloud = async (): Promise<boolean> => {
-    if (!user) {
-      setSyncStatus('local_only');
-      return false;
-    }
+  // Membership state
+  const [isPremiumMember, setIsPremiumMember] = useState<boolean>(() => {
+    return localStorage.getItem('sakhi_premium_active') === 'true';
+  });
+  const [membershipPlan, setMembershipPlan] = useState<'monthly' | 'annual' | null>(() => {
+    return (localStorage.getItem('sakhi_premium_plan') as 'monthly' | 'annual') || null;
+  });
 
-    setSyncStatus('syncing');
-
-    if (isSupabaseConfigured && supabase) {
+  // Cycle settings
+  const [cycleSettings, setCycleSettings] = useState<CycleSettings>(() => {
+    const saved = localStorage.getItem('sakhi_cycle_settings');
+    if (saved) {
       try {
-        // Upsert cycle settings to Supabase
-        await supabase
-          .from('user_cycle_settings')
-          .upsert({
-            user_id: user.id,
-            last_period_date: cycleSettings.lastPeriodDate,
-            cycle_length: cycleSettings.cycleLength,
-            period_duration: cycleSettings.periodDuration,
-            luteal_length: cycleSettings.lutealLength,
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id' });
-
-        // Upsert daily logs to Supabase
-        const entries = Object.values(dailyLogs);
-        for (const entry of entries) {
-          await supabase
-            .from('daily_logs')
-            .upsert({
-              user_id: user.id,
-              date: entry.date,
-              flow: entry.flow || null,
-              mood: entry.mood || null,
-              symptoms: entry.symptoms || [],
-              energy_level: entry.energy || 3,
-              notes: entry.notes || '',
-              water_intake_glasses: entry.waterGlasses || 8,
-              sleep_hours: entry.sleepHours || 8,
-              updated_at: entry.updatedAt || new Date().toISOString(),
-            }, { onConflict: 'user_id,date' });
-        }
-
-        setSyncStatus('synced');
-        setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-        return true;
-      } catch (err) {
-        console.warn('Supabase cloud sync error:', err);
-        setSyncStatus('synced'); // graceful fallback to local persistence
-        return true;
+        return JSON.parse(saved);
+      } catch (e) {
+        // Fallback
       }
     }
+    return DEFAULT_CYCLE_SETTINGS;
+  });
 
-    // Local device backup mode
-    setSyncStatus('synced');
-    setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    return true;
-  };
-
-  // Sync on user state change
-  useEffect(() => {
-    if (!user) {
-      setSyncStatus('local_only');
-      return;
-    }
-
-    let isCancelled = false;
-    const currentUserId = user.id;
-
-    async function fetchUserCloudData() {
-      if (isSupabaseConfigured && supabase) {
-        setSyncStatus('syncing');
-        try {
-          // Fetch settings
-          const { data: settingsData } = await supabase
-            .from('user_cycle_settings')
-            .select('*')
-            .eq('user_id', currentUserId)
-            .single();
-
-          if (settingsData && !isCancelled) {
-            setCycleSettings({
-              lastPeriodDate: settingsData.last_period_date,
-              cycleLength: settingsData.cycle_length,
-              periodDuration: settingsData.period_duration,
-              lutealLength: settingsData.luteal_length,
-            });
-          }
-
-          // Fetch logs
-          const { data: logsData } = await supabase
-            .from('daily_logs')
-            .select('*')
-            .eq('user_id', currentUserId);
-
-          if (logsData && logsData.length > 0 && !isCancelled) {
-            const cloudLogsMap: Record<string, DailyLogEntry> = {};
-            logsData.forEach((row: any) => {
-              cloudLogsMap[row.date] = {
-                date: row.date,
-                flow: row.flow,
-                mood: row.mood,
-                symptoms: row.symptoms || [],
-                energy: row.energy_level,
-                notes: row.notes,
-                waterGlasses: row.water_intake_glasses,
-                sleepHours: row.sleep_hours,
-                updatedAt: row.updated_at,
-              };
-            });
-            setDailyLogs((prev) => ({ ...prev, ...cloudLogsMap }));
-          }
-
-          if (!isCancelled) {
-            setSyncStatus('synced');
-            setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-          }
-        } catch (e) {
-          console.warn('Supabase load note:', e);
-          if (!isCancelled) setSyncStatus('synced');
-        }
-      } else {
-        setSyncStatus('synced');
-        setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+  // Daily logs (keyed by YYYY-MM-DD)
+  const [dailyLogs, setDailyLogs] = useState<Record<string, DailyLogEntry>>(() => {
+    const saved = localStorage.getItem('sakhi_daily_logs');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        // Fallback
       }
     }
+    return {};
+  });
 
-    fetchUserCloudData();
+  // Partner permissions
+  const [partnerPermissions, setPartnerPermissions] = useState<PartnerPermissions>(() => {
+    const saved = localStorage.getItem('sakhi_partner_permissions');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        // Fallback
+      }
+    }
+    return DEFAULT_PARTNER_PERMISSIONS;
+  });
 
-    return () => {
-      isCancelled = true;
-    };
-  }, [user]);
+  // Buddy profile
+  const [buddyProfile, setBuddyProfile] = useState<BuddyProfile>(() => {
+    const saved = localStorage.getItem('sakhi_buddy_profile');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        // Fallback
+      }
+    }
+    return DEFAULT_BUDDY_PROFILE;
+  });
 
-  // Local storage synchronization as backup
+  // Community forum posts
+  const [forumPosts, setForumPosts] = useState<ForumPost[]>([
+    {
+      id: 'post-1',
+      authorPseudonym: 'LotusSister',
+      authorAvatar: '🌸',
+      title: 'First month trying seed cycling - noticeable difference in luteal fatigue',
+      content:
+        'I started adding ground pumpkin and flax seeds to my morning oats during follicular, then sesame and sunflower in luteal. My mood swings before day 28 feel much softer this time around.',
+      category: 'nutrition',
+      createdAt: '2026-09-28',
+      reactions: { heart: 24, helpful: 18, hug: 7 },
+      userReactions: { heart: true },
+      comments: [
+        {
+          id: 'c-1',
+          author: 'GreenTeaBreeze',
+          text: 'Did you grind them fresh or store a week batch in the fridge? Glad it helped!',
+          createdAt: '2026-09-28',
+        },
+      ],
+    },
+    {
+      id: 'post-2',
+      authorPseudonym: 'PCOS_Warrior_9',
+      authorAvatar: '🌿',
+      title: 'Gentle reminder: irregular cycles do not mean your body is broken',
+      content:
+        'Sending love to everyone whose calendar doesn’t match textbook 28 days. Every cycle is a dialogue with our nervous system, sleep, and thyroid.',
+      category: 'pcos',
+      createdAt: '2026-09-27',
+      reactions: { heart: 46, helpful: 32, hug: 29 },
+      userReactions: { hug: true },
+      comments: [],
+    },
+  ]);
+
+  // Persist locally as immediate resilient offline storage
   useEffect(() => {
     localStorage.setItem('sakhi_lang', language);
   }, [language]);
@@ -348,112 +222,539 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [partnerPermissions]);
 
   useEffect(() => {
-    localStorage.setItem('sakhi_forum_posts', JSON.stringify(forumPosts));
-  }, [forumPosts]);
-
-  useEffect(() => {
     localStorage.setItem('sakhi_buddy_profile', JSON.stringify(buddyProfile));
   }, [buddyProfile]);
 
-  const setLanguage = (lang: Language) => {
-    setLanguageState(lang);
-  };
+  // Load authenticated user's private data from Cloud Database on login
+  useEffect(() => {
+    if (!user) {
+      setSyncStatus('local_only');
+      setSyncError(null);
+      return;
+    }
 
-  const updateCycleSettings = async (settings: Partial<CycleSettings>) => {
+    let isCancelled = false;
+    const currentUserId = user.uid || user.id;
+
+    async function loadUserCloudData() {
+      setSyncStatus('syncing');
+      setSyncError(null);
+
+      // --- 1. FIREBASE FIRESTORE ---
+      if (activeProvider === 'firebase' && firestore) {
+        try {
+          // Load Cycle Settings
+          const settingsDocRef = doc(firestore, 'users', currentUserId, 'cycleSettings', 'current');
+          const settingsSnap = await getDoc(settingsDocRef);
+          if (settingsSnap.exists() && !isCancelled) {
+            const data = settingsSnap.data() as CycleSettings;
+            setCycleSettings(data);
+          }
+
+          // Load Daily Logs
+          const logsColRef = collection(firestore, 'users', currentUserId, 'dailyLogs');
+          const logsSnap = await getDocs(logsColRef);
+          if (!isCancelled) {
+            const cloudLogs: Record<string, DailyLogEntry> = {};
+            logsSnap.forEach((docItem) => {
+              const entry = docItem.data() as DailyLogEntry;
+              cloudLogs[entry.date] = { ...entry, syncedToCloud: true };
+            });
+            if (Object.keys(cloudLogs).length > 0) {
+              setDailyLogs(cloudLogs);
+            }
+          }
+
+          // Load Membership
+          const memberDocRef = doc(firestore, 'users', currentUserId, 'membership', 'current');
+          const memberSnap = await getDoc(memberDocRef);
+          if (memberSnap.exists() && !isCancelled) {
+            const mData = memberSnap.data();
+            if (mData.status === 'active' || mData.status === 'verified') {
+              setIsPremiumMember(true);
+              setMembershipPlan(mData.planId || 'monthly');
+              localStorage.setItem('sakhi_premium_active', 'true');
+              localStorage.setItem('sakhi_premium_plan', mData.planId || 'monthly');
+            }
+          }
+
+          if (!isCancelled) {
+            setSyncStatus('synced');
+            setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          }
+          return;
+        } catch (err: any) {
+          console.warn('Firestore load error:', err);
+          if (!isCancelled) {
+            setSyncStatus('error');
+            setSyncError(err?.message || 'Could not fetch records from Firestore');
+          }
+          return;
+        }
+      }
+
+      // --- 2. SUPABASE POSTGRESQL ---
+      if (activeProvider === 'supabase' && isSupabaseConfigured && supabase) {
+        try {
+          // Load Cycle Settings
+          let { data: settingsData, error: sErr } = await supabase
+            .from('cycle_settings')
+            .select('*')
+            .eq('user_id', currentUserId)
+            .maybeSingle();
+
+          // Fallback to user_cycle_settings if table was named differently
+          if (sErr || !settingsData) {
+            const fallback = await supabase
+              .from('user_cycle_settings')
+              .select('*')
+              .eq('user_id', currentUserId)
+              .maybeSingle();
+            if (fallback.data) settingsData = fallback.data;
+          }
+
+          if (settingsData && !isCancelled) {
+            setCycleSettings({
+              lastPeriodDate: settingsData.last_period_date,
+              cycleLength: settingsData.cycle_length,
+              periodDuration: settingsData.period_duration,
+              lutealLength: settingsData.luteal_length,
+            });
+          }
+
+          // Load Daily Logs
+          const { data: logsData, error: lErr } = await supabase
+            .from('daily_logs')
+            .select('*')
+            .eq('user_id', currentUserId);
+
+          if (lErr) throw lErr;
+
+          if (logsData && !isCancelled) {
+            const cloudLogsMap: Record<string, DailyLogEntry> = {};
+            logsData.forEach((row: any) => {
+              cloudLogsMap[row.date] = {
+                date: row.date,
+                flow: row.flow,
+                mood: row.mood,
+                symptoms: Array.isArray(row.symptoms) ? row.symptoms : [],
+                energy: row.energy,
+                notes: row.notes,
+                waterGlasses: row.water_glasses,
+                sleepHours: row.sleep_hours,
+                updatedAt: row.updated_at,
+                syncedToCloud: true,
+              };
+            });
+            if (Object.keys(cloudLogsMap).length > 0) {
+              setDailyLogs(cloudLogsMap);
+            }
+          }
+
+          if (!isCancelled) {
+            setSyncStatus('synced');
+            setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          }
+        } catch (err: any) {
+          console.warn('Supabase load error:', err);
+          if (!isCancelled) {
+            setSyncStatus('error');
+            setSyncError(err?.message || 'Could not fetch records from Supabase');
+          }
+        }
+      }
+    }
+
+    loadUserCloudData();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [user, activeProvider]);
+
+  // Sync all logs to Cloud
+  const syncAllLogsToCloud = useCallback(async (): Promise<boolean> => {
+    if (!user) {
+      setSyncStatus('local_only');
+      return false;
+    }
+
+    setSyncStatus('syncing');
+    setSyncError(null);
+    const currentUserId = user.uid || user.id;
+
+    // Firebase
+    if (activeProvider === 'firebase' && firestore) {
+      try {
+        // Save Settings
+        const settingsDocRef = doc(firestore, 'users', currentUserId, 'cycleSettings', 'current');
+        await setDoc(
+          settingsDocRef,
+          {
+            ...cycleSettings,
+            userId: currentUserId,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
+        // Save Daily Logs
+        const entries = Object.values(dailyLogs);
+        for (const entry of entries) {
+          const logDocRef = doc(firestore, 'users', currentUserId, 'dailyLogs', entry.date);
+          await setDoc(
+            logDocRef,
+            {
+              ...entry,
+              userId: currentUserId,
+              updatedAt: entry.updatedAt || new Date().toISOString(),
+            },
+            { merge: true }
+          );
+        }
+
+        setSyncStatus('synced');
+        setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        return true;
+      } catch (err: any) {
+        console.error('Firestore sync error:', err);
+        setSyncStatus('error');
+        setSyncError(err?.message || 'Failed to sync data to Firestore');
+        return false;
+      }
+    }
+
+    // Supabase
+    if (activeProvider === 'supabase' && isSupabaseConfigured && supabase) {
+      try {
+        // Upsert Settings
+        const { error: sErr } = await supabase.from('cycle_settings').upsert(
+          {
+            user_id: currentUserId,
+            last_period_date: cycleSettings.lastPeriodDate,
+            cycle_length: cycleSettings.cycleLength,
+            period_duration: cycleSettings.periodDuration,
+            luteal_length: cycleSettings.lutealLength,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        );
+        if (sErr) throw sErr;
+
+        // Upsert Daily Logs
+        const entries = Object.values(dailyLogs);
+        for (const entry of entries) {
+          const { error: lErr } = await supabase.from('daily_logs').upsert(
+            {
+              user_id: currentUserId,
+              date: entry.date,
+              flow: entry.flow || null,
+              mood: entry.mood || null,
+              symptoms: entry.symptoms || [],
+              energy: entry.energy || 3,
+              notes: entry.notes || '',
+              water_glasses: entry.waterGlasses || 8,
+              sleep_hours: entry.sleepHours || 8,
+              updated_at: entry.updatedAt || new Date().toISOString(),
+            },
+            { onConflict: 'user_id,date' }
+          );
+          if (lErr) throw lErr;
+        }
+
+        setSyncStatus('synced');
+        setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        return true;
+      } catch (err: any) {
+        console.error('Supabase sync error:', err);
+        setSyncStatus('error');
+        setSyncError(err?.message || 'Failed to sync data to Supabase');
+        return false;
+      }
+    }
+
+    setSyncStatus('local_only');
+    return true;
+  }, [user, activeProvider, cycleSettings, dailyLogs]);
+
+  // Retry failed sync
+  const retryFailedSync = useCallback(async (): Promise<boolean> => {
+    return await syncAllLogsToCloud();
+  }, [syncAllLogsToCloud]);
+
+  // Update Cycle Settings
+  const updateCycleSettings = async (settings: Partial<CycleSettings>): Promise<boolean> => {
     const updated = { ...cycleSettings, ...settings };
     setCycleSettings(updated);
 
-    if (user && isSupabaseConfigured && supabase) {
+    if (!user) {
+      setSyncStatus('local_only');
+      return true;
+    }
+
+    const currentUserId = user.uid || user.id;
+    setSyncStatus('syncing');
+
+    // Firebase
+    if (activeProvider === 'firebase' && firestore) {
       try {
-        await supabase
-          .from('user_cycle_settings')
-          .upsert({
-            user_id: user.id,
+        const docRef = doc(firestore, 'users', currentUserId, 'cycleSettings', 'current');
+        await setDoc(
+          docRef,
+          {
+            ...updated,
+            userId: currentUserId,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+        setSyncStatus('synced');
+        setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        return true;
+      } catch (err: any) {
+        console.error('Firestore save settings error:', err);
+        setSyncStatus('error');
+        setSyncError(err?.message || 'Could not save cycle settings to cloud');
+        return false;
+      }
+    }
+
+    // Supabase
+    if (activeProvider === 'supabase' && isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase.from('cycle_settings').upsert(
+          {
+            user_id: currentUserId,
             last_period_date: updated.lastPeriodDate,
             cycle_length: updated.cycleLength,
             period_duration: updated.periodDuration,
             luteal_length: updated.lutealLength,
             updated_at: new Date().toISOString(),
-          }, { onConflict: 'user_id' });
-      } catch (e) {
-        console.warn('Supabase save cycleSettings note:', e);
+          },
+          { onConflict: 'user_id' }
+        );
+        if (error) throw error;
+        setSyncStatus('synced');
+        setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        return true;
+      } catch (err: any) {
+        console.error('Supabase save settings error:', err);
+        setSyncStatus('error');
+        setSyncError(err?.message || 'Could not save cycle settings to Supabase');
+        return false;
       }
     }
+
+    setSyncStatus('local_only');
+    return true;
   };
 
-  const saveDailyLog = async (entry: DailyLogEntry) => {
-    const updatedEntry = { ...entry, updatedAt: new Date().toISOString() };
+  // Save Daily Log
+  const saveDailyLog = async (entry: DailyLogEntry): Promise<boolean> => {
+    const updatedEntry: DailyLogEntry = {
+      ...entry,
+      updatedAt: new Date().toISOString(),
+      syncedToCloud: false,
+    };
+
+    // Resilient local state update first so user never loses their form input
     setDailyLogs((prev) => ({
       ...prev,
       [entry.date]: updatedEntry,
     }));
 
-    if (user && isSupabaseConfigured && supabase) {
-      setSyncStatus('syncing');
+    if (!user) {
+      setSyncStatus('local_only');
+      return true;
+    }
+
+    const currentUserId = user.uid || user.id;
+    setSyncStatus('syncing');
+    setSyncError(null);
+
+    // Firebase
+    if (activeProvider === 'firebase' && firestore) {
       try {
-        await supabase
-          .from('daily_logs')
-          .upsert({
-            user_id: user.id,
+        const docRef = doc(firestore, 'users', currentUserId, 'dailyLogs', entry.date);
+        await setDoc(
+          docRef,
+          {
+            ...updatedEntry,
+            userId: currentUserId,
+            syncedToCloud: true,
+          },
+          { merge: true }
+        );
+
+        setDailyLogs((prev) => ({
+          ...prev,
+          [entry.date]: { ...updatedEntry, syncedToCloud: true },
+        }));
+        setSyncStatus('synced');
+        setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        return true;
+      } catch (err: any) {
+        console.error('Firestore save daily log error:', err);
+        setSyncStatus('error');
+        setSyncError(err?.message || 'Failed to save daily log to Firestore');
+        return false;
+      }
+    }
+
+    // Supabase
+    if (activeProvider === 'supabase' && isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase.from('daily_logs').upsert(
+          {
+            user_id: currentUserId,
             date: entry.date,
             flow: entry.flow || null,
             mood: entry.mood || null,
             symptoms: entry.symptoms || [],
-            energy_level: entry.energy || 3,
+            energy: entry.energy || 3,
             notes: entry.notes || '',
-            water_intake_glasses: entry.waterGlasses || 8,
+            water_glasses: entry.waterGlasses || 8,
             sleep_hours: entry.sleepHours || 8,
             updated_at: updatedEntry.updatedAt,
-          }, { onConflict: 'user_id,date' });
+          },
+          { onConflict: 'user_id,date' }
+        );
+
+        if (error) throw error;
+
+        setDailyLogs((prev) => ({
+          ...prev,
+          [entry.date]: { ...updatedEntry, syncedToCloud: true },
+        }));
         setSyncStatus('synced');
         setLastSyncedTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-      } catch (e) {
-        console.warn('Supabase save dailyLog note:', e);
-        setSyncStatus('synced');
+        return true;
+      } catch (err: any) {
+        console.error('Supabase save daily log error:', err);
+        setSyncStatus('error');
+        setSyncError(err?.message || 'Failed to save daily log to Supabase');
+        return false;
       }
-    } else {
-      setSyncStatus('local_only');
     }
+
+    setSyncStatus('local_only');
+    return true;
   };
 
-  const deleteDailyLog = async (date: string) => {
+  // Delete Daily Log
+  const deleteDailyLog = async (date: string): Promise<boolean> => {
     setDailyLogs((prev) => {
       const copy = { ...prev };
       delete copy[date];
       return copy;
     });
 
-    if (user && isSupabaseConfigured && supabase) {
+    if (!user) return true;
+    const currentUserId = user.uid || user.id;
+
+    if (activeProvider === 'firebase' && firestore) {
       try {
-        await supabase
-          .from('daily_logs')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('date', date);
-      } catch (e) {
-        console.warn('Supabase delete dailyLog note:', e);
+        const docRef = doc(firestore, 'users', currentUserId, 'dailyLogs', date);
+        await deleteDoc(docRef);
+        return true;
+      } catch (err) {
+        console.warn('Firestore delete error:', err);
+        return false;
       }
     }
+
+    if (activeProvider === 'supabase' && isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('daily_logs').delete().eq('user_id', currentUserId).eq('date', date);
+        return true;
+      } catch (err) {
+        console.warn('Supabase delete error:', err);
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  // Activate Verified Razorpay Membership
+  const activateMembership = async (
+    planId: 'monthly' | 'annual',
+    details: { orderId: string; paymentId: string; amount: number }
+  ): Promise<boolean> => {
+    setIsPremiumMember(true);
+    setMembershipPlan(planId);
+    localStorage.setItem('sakhi_premium_active', 'true');
+    localStorage.setItem('sakhi_premium_plan', planId);
+
+    if (!user) return true;
+    const currentUserId = user.uid || user.id;
+
+    // Save to Firestore
+    if (activeProvider === 'firebase' && firestore) {
+      try {
+        const memberRef = doc(firestore, 'users', currentUserId, 'membership', 'current');
+        await setDoc(memberRef, {
+          userId: currentUserId,
+          planId,
+          status: 'active',
+          amount: details.amount,
+          activatedAt: new Date().toISOString(),
+          lastPaymentId: details.paymentId,
+          lastOrderId: details.orderId,
+        });
+
+        // Add to payments log
+        const paymentRef = doc(firestore, 'users', currentUserId, 'payments', details.paymentId);
+        await setDoc(paymentRef, {
+          userId: currentUserId,
+          orderId: details.orderId,
+          paymentId: details.paymentId,
+          planId,
+          amount: details.amount,
+          status: 'verified',
+          createdAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.warn('Firestore payment record save error:', err);
+      }
+    }
+
+    // Save to Supabase
+    if (activeProvider === 'supabase' && isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('user_payments').insert({
+          user_id: currentUserId,
+          order_id: details.orderId,
+          payment_id: details.paymentId,
+          plan_id: planId,
+          amount: details.amount,
+          status: 'verified',
+          created_at: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.warn('Supabase payment save error:', err);
+      }
+    }
+
+    return true;
   };
 
   const getLogForDate = (date: string) => dailyLogs[date];
 
-  const updatePartnerPermissions = async (updates: Partial<PartnerPermissions>) => {
-    const updated = { ...partnerPermissions, ...updates };
-    setPartnerPermissions(updated);
+  const updatePartnerPermissions = (updates: Partial<PartnerPermissions>) => {
+    setPartnerPermissions((prev) => ({ ...prev, ...updates }));
   };
 
-  const disconnectPartner = async () => {
-    const updated = {
-      ...partnerPermissions,
+  const disconnectPartner = () => {
+    setPartnerPermissions((prev) => ({
+      ...prev,
       isLinked: false,
       partnerName: '',
       inviteCode: `SAKHI-CARE-${Math.floor(1000 + Math.random() * 9000)}`,
-    };
-    setPartnerPermissions(updated);
+    }));
   };
 
-  const addForumPost = async (title: string, content: string, category: ForumPost['category']) => {
+  const addForumPost = (title: string, content: string, category: ForumPost['category']) => {
     const newPost: ForumPost = {
       id: `post-${Date.now()}`,
       authorPseudonym: `RosePetal_${Math.floor(10 + Math.random() * 90)}`,
@@ -523,7 +824,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider
       value={{
         language,
-        setLanguage,
+        setLanguage: setLanguageState,
         activeSection,
         setActiveSection,
         activeSubSection,
@@ -549,8 +850,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         selectedCalendarDate,
         setSelectedCalendarDate,
         syncStatus,
+        syncError,
         lastSyncedTime,
         syncAllLogsToCloud,
+        retryFailedSync,
+        isPremiumMember,
+        membershipPlan,
+        activateMembership,
       }}
     >
       {children}

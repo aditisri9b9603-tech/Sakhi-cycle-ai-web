@@ -42,6 +42,11 @@ service cloud.firestore {
       match /partnerPermissions/{permId} {
         allow read, write: if isValidId(userId) && isOwner(userId);
       }
+
+      // User memberships & verified payments
+      match /payments/{paymentId} {
+        allow read, write: if isValidId(userId) && isOwner(userId);
+      }
     }
 
     // Community Forum Posts

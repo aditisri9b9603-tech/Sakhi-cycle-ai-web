@@ -1,11 +1,12 @@
 {
-  "projectId": "gen-lang-client-0760678918",
-  "appId": "1:392094057240:web:1f2a4ad553097f4135d46d",
-  "apiKey": "AIzaSyCO-OK5jVj-OqqnNALiFr_EEC-p8mCBCtM",
-  "authDomain": "gen-lang-client-0760678918.firebaseapp.com",
-  "storageBucket": "gen-lang-client-0760678918.firebasestorage.app",
-  "messagingSenderId": "392094057240",
+  "projectId": "river-mediator-m7krv",
+  "appId": "1:209019176844:web:2c44273d59c42ec5bef8a9",
+  "apiKey": "AIzaSyDwcbvE1TdqmtGQMzAAaX9dRxqeZyHjcUo",
+  "authDomain": "river-mediator-m7krv.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-sakhicycleaiweb-e444fa5a-f998-4c79-a963-f7d8b7624415",
+  "storageBucket": "river-mediator-m7krv.firebasestorage.app",
+  "messagingSenderId": "209019176844",
   "measurementId": "",
-  "oAuthClientId": "392094057240-2idl12qi4kr0lbmrbv1jl752ehnqppiq.apps.googleusercontent.com",
+  "oAuthClientId": "209019176844-7b0o3jp1mhjqt6hbfnsmjua3t42scjsj.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

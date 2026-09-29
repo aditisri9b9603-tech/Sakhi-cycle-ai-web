@@ -48,9 +48,10 @@ export const DailyLog: React.FC = () => {
   const [sleepHours, setSleepHours] = useState<number>(8);
   const [waterGlasses, setWaterGlasses] = useState<number>(8);
   const [notes, setNotes] = useState<string>('');
-  const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
+  const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' | 'pending' } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Sync state when selected date changes or existing log loads
   useEffect(() => {
@@ -91,13 +92,23 @@ export const DailyLog: React.FC = () => {
     const success = await syncAllLogsToCloud();
     setIsManualSyncing(false);
     if (success) {
-      setFeedbackMsg('All daily logs synced with Firebase Cloud!');
+      setFeedbackMsg({ text: 'All daily logs successfully synced to cloud! ☁️', type: 'success' });
       setTimeout(() => setFeedbackMsg(null), 3500);
+    } else {
+      setFeedbackMsg({
+        text: 'Cloud sync encountered a network issue. Logs remain safely on this device. Click to retry.',
+        type: 'error',
+      });
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
+
+    setIsSaving(true);
+    setFeedbackMsg({ text: 'Saving and syncing to database...', type: 'pending' });
+
     const entry: DailyLogEntry = {
       date,
       mood,
@@ -108,15 +119,28 @@ export const DailyLog: React.FC = () => {
       waterGlasses,
       notes,
     };
-    saveDailyLog(entry);
-    setFeedbackMsg(user ? 'Entry saved and synced to cloud! ☁️' : t('entrySaved'));
-    setTimeout(() => setFeedbackMsg(null), 3500);
+
+    const success = await saveDailyLog(entry);
+    setIsSaving(false);
+
+    if (success && user) {
+      setFeedbackMsg({ text: 'Entry confirmed & saved to database! ☁️', type: 'success' });
+      setTimeout(() => setFeedbackMsg(null), 3500);
+    } else if (success && !user) {
+      setFeedbackMsg({ text: 'Entry saved securely on this device (Local Guest).', type: 'success' });
+      setTimeout(() => setFeedbackMsg(null), 3500);
+    } else {
+      setFeedbackMsg({
+        text: 'Saved locally on device, but cloud sync failed. Check your network or provider dashboard.',
+        type: 'error',
+      });
+    }
   };
 
-  const handleDelete = () => {
-    deleteDailyLog(date);
+  const handleDelete = async () => {
+    await deleteDailyLog(date);
     setConfirmDelete(false);
-    setFeedbackMsg(t('entryDeleted'));
+    setFeedbackMsg({ text: t('entryDeleted'), type: 'success' });
     setTimeout(() => setFeedbackMsg(null), 3000);
   };
 
@@ -224,9 +248,32 @@ export const DailyLog: React.FC = () => {
       </div>
 
       {feedbackMsg && (
-        <div className="p-4 bg-[#F3FAF5] border border-[#BFE7D0] text-[#226947] rounded-2xl text-xs sm:text-sm flex items-center gap-2 shadow-xs transition-all">
-          <CheckCircle className="w-4 h-4 text-[#58B988]" />
-          <span>{feedbackMsg}</span>
+        <div
+          className={`p-4 rounded-2xl text-xs sm:text-sm flex items-center justify-between gap-3 shadow-xs transition-all ${
+            feedbackMsg.type === 'error'
+              ? 'bg-[#FFF0F3] border border-[#F4D5DC] text-[#A8385D]'
+              : feedbackMsg.type === 'pending'
+              ? 'bg-[#FFF8F0] border border-[#FEE2C7] text-[#B45309]'
+              : 'bg-[#F3FAF5] border border-[#BFE7D0] text-[#226947]'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {feedbackMsg.type === 'error' && <AlertCircle className="w-4 h-4 text-[#D9658B] shrink-0" />}
+            {feedbackMsg.type === 'pending' && (
+              <RefreshCw className="w-4 h-4 text-[#B45309] animate-spin shrink-0" />
+            )}
+            {feedbackMsg.type === 'success' && <CheckCircle className="w-4 h-4 text-[#58B988] shrink-0" />}
+            <span>{feedbackMsg.text}</span>
+          </div>
+          {feedbackMsg.type === 'error' && (
+            <button
+              type="button"
+              onClick={handleManualSync}
+              className="text-xs font-bold text-[#D9658B] hover:underline shrink-0"
+            >
+              Retry Sync
+            </button>
+          )}
         </div>
       )}
 
@@ -487,10 +534,11 @@ export const DailyLog: React.FC = () => {
 
           <button
             type="submit"
-            className="flex items-center justify-center gap-2 px-8 py-3 bg-[#D9658B] hover:bg-[#C54E74] text-white rounded-2xl text-sm font-bold shadow-md shadow-[#D9658B]/20 transition-all active:scale-[0.98]"
+            disabled={isSaving}
+            className="flex items-center justify-center gap-2 px-8 py-3 bg-[#D9658B] hover:bg-[#C54E74] text-white rounded-2xl text-sm font-bold shadow-md shadow-[#D9658B]/20 transition-all active:scale-[0.98] disabled:opacity-60"
           >
-            <Save className="w-4 h-4" />
-            <span>{t('saveEntry')}</span>
+            {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            <span>{isSaving ? 'Saving to Database...' : t('saveEntry')}</span>
           </button>
         </div>
       </form>

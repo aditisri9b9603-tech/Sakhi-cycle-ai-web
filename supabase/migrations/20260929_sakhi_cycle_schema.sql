@@ -43,6 +43,30 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- Provide backward-compatible view for user_cycle_settings
+CREATE OR REPLACE VIEW public.user_cycle_settings AS
+  SELECT * FROM public.cycle_settings;
+
+-- 2.5 Payments & Membership Table
+CREATE TABLE IF NOT EXISTS public.user_payments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  order_id TEXT NOT NULL,
+  payment_id TEXT NOT NULL,
+  plan_id TEXT NOT NULL,
+  amount INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'verified',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.user_payments ENABLE ROW LEVEL SECURITY;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'user_payments' AND policyname = 'Users can manage own payments') THEN
+    CREATE POLICY "Users can manage own payments" ON public.user_payments FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
+
 -- 3. Daily Logs Table
 CREATE TABLE IF NOT EXISTS public.daily_logs (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

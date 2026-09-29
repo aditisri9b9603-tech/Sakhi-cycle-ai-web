@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PeriodProduct } from '../types';
+import { YouTubeEmbed } from './YouTubeEmbed';
 import {
   Search,
   Check,
@@ -30,9 +31,9 @@ interface YoutubeTutorial {
 const YOUTUBE_TUTORIALS_LIBRARY: YoutubeTutorial[] = [
   {
     id: 'yt-1',
-    youtubeId: '72_YmB7vDqg',
+    youtubeId: 'CbbhxZQA1ps',
     title: 'How to Use a Menstrual Cup: Step-by-Step Beginners Guide & Folds',
-    channel: 'Menstrual Health Foundation',
+    channel: 'Diana In The Pink',
     duration: '8:45',
     category: 'products',
     description: 'Learn the punch-down and C-fold techniques, how to check the seal, and gentle removal without pain.',
@@ -50,9 +51,9 @@ const YOUTUBE_TUTORIALS_LIBRARY: YoutubeTutorial[] = [
   },
   {
     id: 'yt-2',
-    youtubeId: 'qj8bQ3HnNvg',
+    youtubeId: 'NGvY5aX7LPw',
     title: 'Period Hygiene, Changing Frequency & Choosing Organic Cotton',
-    channel: 'Women Wellness Guild',
+    channel: 'Glamrs',
     duration: '6:12',
     category: 'products',
     description: 'Why chlorine-free and unbleached cotton prevents friction, contact rashes, and vulvar dermatitis.',
@@ -70,9 +71,9 @@ const YOUTUBE_TUTORIALS_LIBRARY: YoutubeTutorial[] = [
   },
   {
     id: 'yt-3',
-    youtubeId: 'X94gGfB9aYg',
+    youtubeId: 'kmWbOC8Fbb0',
     title: 'How Period Underwear Works: Multi-Layer Absorbency, Care & Machine Washing',
-    channel: 'Sustainable Flow',
+    channel: 'AMAZE Org',
     duration: '5:30',
     category: 'products',
     description: 'Cold-water rinsing and air-drying secrets to maintain leak-proof membranes for 3+ years.',
@@ -90,9 +91,9 @@ const YOUTUBE_TUTORIALS_LIBRARY: YoutubeTutorial[] = [
   },
   {
     id: 'yt-4',
-    youtubeId: '2L2lnxIcNmo',
+    youtubeId: '2X78NWuRfJU',
     title: '15-Minute Gentle Yoga for Menstrual Cramps & Pelvic Pain Relief',
-    channel: 'Somatic Healing Yoga',
+    channel: 'Mady Morrison',
     duration: '15:20',
     category: 'cramp-relief',
     description: 'Restorative child pose, supported bridge, and reclined butterfly to release lower belly tension.',
@@ -110,23 +111,23 @@ const YOUTUBE_TUTORIALS_LIBRARY: YoutubeTutorial[] = [
   },
   {
     id: 'yt-5',
-    youtubeId: '7x_x9dY1x2s',
-    title: 'Natural Home Remedies for Cramps: Thermal Compresses, Ginger & Acupressure',
-    channel: 'Ayurvedic & Modern Health',
-    duration: '7:55',
+    youtubeId: '4JaCcp39iVI',
+    title: 'Yoga for Cramps and PMS: 20-Minute Home Yoga Practice',
+    channel: 'Yoga With Adriene',
+    duration: '20:15',
     category: 'cramp-relief',
-    description: 'Using heat packs on the sacrum, acupressure on Spleen 6 point, and anti-inflammatory ginger tea.',
+    description: 'Gentle, nourishing yoga sequence specifically designed to relieve pelvic congestion and menstrual tension.',
     keySteps: [
-      'Apply thermal compress or heating pad (40°C - 45°C) to lower abdomen or sacrum for 20 mins.',
-      'Sip fresh warm ginger and chamomile tea with a pinch of Ceylon cinnamon.',
-      'Locate SP6 (San Yin Jiao) 4 finger-widths above the inner ankle bone; massage gently in circles.',
-      'Take magnesium glycinate (200-300mg with doctor consult) to support smooth muscle relaxation.',
+      'Gentle pelvic tilts and cat-cow breathing to release lower lumbar compression.',
+      'Supported child pose with deep diaphragmatic breaths.',
+      'Reclined spinal twist with soft bolster support.',
+      'Final savasana with soothing breath awareness.',
     ],
     bestPractices: [
-      'Never apply naked boiling water bottles directly to bare skin; use a cotton sleeve.',
-      'Start warm ginger infusions 2 days before anticipated period onset for best prostaglandin inhibition.',
+      'Move intuitively without forcing any deep twists or uncomfortable abdominal compressions.',
+      'Use warm blankets and cushions liberally for joint and pelvic support.',
     ],
-    clinicalTakeaway: 'Topical continuous low-level heat has been clinically shown in randomized trials to be as effective as standard ibuprofen for primary dysmenorrhea relief.',
+    clinicalTakeaway: 'Mindful rhythmic breathing increases nitric oxide production, aiding pelvic blood perfusion and muscle relaxation.',
   },
   {
     id: 'yt-6',
@@ -150,23 +151,21 @@ const YOUTUBE_TUTORIALS_LIBRARY: YoutubeTutorial[] = [
   },
   {
     id: 'yt-7',
-    youtubeId: 'fJ9rUzIMcZQ',
-    title: 'Gynecologist Q&A: Irregular Periods, PCOS Symptoms & When to See a Doctor',
-    channel: 'FOGSI Women Health Channel',
-    duration: '14:40',
-    category: 'doctor-qa',
-    description: 'Real gynecologists answer frequently asked questions about missed periods, spotting, and hormonal tests.',
+    youtubeId: 'WbM9JkJBRic',
+    title: 'How to Insert & Remove a Menstrual Cup with Ease',
+    channel: 'Pixie Menstrual Cup',
+    duration: '7:40',
+    category: 'products',
+    description: 'Clear visual demonstration of breaking the vacuum seal and effortless insertion positioning.',
     keySteps: [
-      'Track bleeding duration: Normal period length is 3-7 days; cycles range between 21-35 days.',
-      'Notice “Red Flags”: Bleeding requiring pad change every 1-2 hours, or periods absent for 90+ days.',
-      'Understand PCOS markers: Irregular cycles, excess facial hair (hirsutism), stubborn cystic acne.',
-      'Prepare for doctor visits: Bring 3-6 months of tracked cycle logs from Sakhi Cycle.',
+      'Fold the rim using the 7-fold or labia fold.',
+      'Point the cup back and down toward the tailbone.',
+      'Allow the rim to pop open beneath the cervix.',
     ],
     bestPractices: [
-      'Never ignore persistent intermenstrual spotting (bleeding between periods).',
-      'Schedule gynaecological wellness checkups every 1-2 years or when unusual pain occurs.',
+      'Keep your pelvic floor muscles slackened as if exhaling deeply.',
     ],
-    clinicalTakeaway: 'Keeping a continuous objective cycle log empowers clinicians to differentiate between transient stress-induced anovulation and chronic conditions like PCOS or endometriosis.',
+    clinicalTakeaway: 'Ensuring correct positioning below the cervix prevents leakage and eliminates bladder pressure.',
   },
 ];
 
@@ -194,7 +193,7 @@ const PRODUCTS_DATA: PeriodProduct[] = [
     cleaningInstructions: 'Boil in clean rolling water for 5 minutes between monthly cycles. Rinse with cold water before re-insertion.',
     wearTimeHours: '8 – 12 hours',
     ecoImpact: 'Reusable / Low',
-    tutorialYoutubeId: '72_YmB7vDqg',
+    tutorialYoutubeId: 'CbbhxZQA1ps',
     tutorialTitle: 'How to Use a Menstrual Cup: Step-by-Step Beginners Guide',
   },
   {
@@ -219,7 +218,7 @@ const PRODUCTS_DATA: PeriodProduct[] = [
     ],
     wearTimeHours: '4 – 6 hours',
     ecoImpact: 'Biodegradable',
-    tutorialYoutubeId: 'qj8bQ3HnNvg',
+    tutorialYoutubeId: 'NGvY5aX7LPw',
     tutorialTitle: 'Period Hygiene & Choosing Non-Toxic Organic Pads',
   },
   {
@@ -244,7 +243,7 @@ const PRODUCTS_DATA: PeriodProduct[] = [
     cleaningInstructions: 'Machine wash cold without fabric softeners or bleach; hang to dry naturally.',
     wearTimeHours: '8 – 10 hours',
     ecoImpact: 'Reusable / Low',
-    tutorialYoutubeId: 'X94gGfB9aYg',
+    tutorialYoutubeId: 'kmWbOC8Fbb0',
     tutorialTitle: 'How Period Underwear Works: Absorbency, Care & Washing',
   },
   {
@@ -268,8 +267,8 @@ const PRODUCTS_DATA: PeriodProduct[] = [
     ],
     wearTimeHours: 'Up to 8 hours',
     ecoImpact: 'Single-Use',
-    tutorialYoutubeId: '7x_x9dY1x2s',
-    tutorialTitle: 'Natural Remedies for Menstrual Cramps: Heat, Acupressure & Teas',
+    tutorialYoutubeId: '4JaCcp39iVI',
+    tutorialTitle: 'Natural Remedies for Menstrual Cramps: Yoga & Acupressure',
   },
 ];
 
@@ -459,27 +458,15 @@ export const ProductsSection: React.FC = () => {
                     Featured Video: {selectedProduct.tutorialTitle}
                   </span>
                 </div>
-                <a
-                  href={`https://www.youtube.com/watch?v=${selectedProduct.tutorialYoutubeId}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 text-[11px] font-semibold text-[#D9658B] hover:underline"
-                >
-                  <span>Open on YouTube</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
               </div>
 
-              {/* YouTube Embed Container */}
-              <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-black/10 border border-[#F4D5DC] shadow-xs">
-                <iframe
-                  src={`https://www.youtube-nocookie.com/embed/${selectedProduct.tutorialYoutubeId}`}
-                  title={selectedProduct.tutorialTitle}
-                  className="w-full h-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
+              {/* Standardized Responsive YouTube Embed Component */}
+              <YouTubeEmbed
+                videoSource={selectedProduct.tutorialYoutubeId}
+                title={selectedProduct.tutorialTitle}
+                channelName="Sakhi Cycle Care Guide"
+                description={selectedProduct.description}
+              />
             </div>
           </div>
         </div>
@@ -568,13 +555,12 @@ export const ProductsSection: React.FC = () => {
               </button>
             </div>
 
-            <div className="relative w-full aspect-video rounded-2xl overflow-hidden bg-black shadow-inner">
-              <iframe
-                src={`https://www.youtube-nocookie.com/embed/${activeVideoModal.youtubeId}?autoplay=1`}
+            <div className="w-full">
+              <YouTubeEmbed
+                videoSource={activeVideoModal.youtubeId}
                 title={activeVideoModal.title}
-                className="w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
+                channelName={activeVideoModal.channel}
+                description={activeVideoModal.description}
               />
             </div>
 

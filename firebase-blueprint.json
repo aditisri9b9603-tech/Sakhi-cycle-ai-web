@@ -77,6 +77,21 @@
         "createdAt": { "type": "string" }
       },
       "required": ["authorUid", "title", "content", "category"]
+    },
+    "PaymentRecord": {
+      "title": "PaymentRecord",
+      "description": "Verified Razorpay subscription payments",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "orderId": { "type": "string" },
+        "paymentId": { "type": "string" },
+        "planId": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "orderId", "paymentId", "planId", "amount", "status"]
     }
   },
   "firestore": {
@@ -95,6 +110,10 @@
     "/users/{userId}/partnerPermissions/current": {
       "schema": { "$ref": "#/entities/PartnerPermissions" },
       "description": "Partner permissions for user"
+    },
+    "/users/{userId}/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/PaymentRecord" },
+      "description": "User payment transactions"
     },
     "/forumPosts/{postId}": {
       "schema": { "$ref": "#/entities/ForumPost" },

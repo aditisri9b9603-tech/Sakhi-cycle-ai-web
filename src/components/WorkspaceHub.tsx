@@ -137,17 +137,16 @@ export const WorkspaceHub: React.FC = () => {
     }
   }, [accessToken, activeTab]);
 
-  // Send Email with mandatory user confirmation
+  // Send Email
   const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accessToken) return;
-
-    const confirmed = window.confirm(
-      `Send cycle summary email to ${recipientEmail} with subject "${emailSubject}" via your authorized Gmail account?`
-    );
-    if (!confirmed) return;
+    if (!accessToken) {
+      setErrorMessage('Please authorize Google Workspace above to send directly via Gmail API, or use the pre-filled template link.');
+      return;
+    }
 
     setLoading(true);
+    setErrorMessage(null);
     try {
       const utf8Subject = `=?utf-8?B?${btoa(unescape(encodeURIComponent(emailSubject)))}?=`;
       const messageParts = [
@@ -174,12 +173,8 @@ export const WorkspaceHub: React.FC = () => {
       });
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        // Provide seamless direct Gmail web composer fallback
-        const mailtoUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(recipientEmail)}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
-        window.open(mailtoUrl, '_blank');
-        setStatusMessage('Opened in Gmail web composer with your cycle summary pre-filled!');
-        setTimeout(() => setStatusMessage(null), 5000);
+        setStatusMessage('Gmail API scope is restricted. Click "Open Pre-filled Gmail Composer" to review and send.');
+        setTimeout(() => setStatusMessage(null), 6000);
         return;
       }
 
@@ -187,11 +182,9 @@ export const WorkspaceHub: React.FC = () => {
       setTimeout(() => setStatusMessage(null), 4000);
       fetchRecentEmails();
     } catch (err: any) {
-      // Direct web fallback when token or restricted scope blocks API call
-      const mailtoUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(recipientEmail)}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
-      window.open(mailtoUrl, '_blank');
-      setStatusMessage('Opened draft in Gmail composer with your cycle summary pre-filled!');
-      setTimeout(() => setStatusMessage(null), 5000);
+      console.warn('Gmail API send error:', err);
+      setStatusMessage('Click "Open Pre-filled Gmail Composer" below to send.');
+      setTimeout(() => setStatusMessage(null), 6000);
     } finally {
       setLoading(false);
     }
@@ -200,9 +193,13 @@ export const WorkspaceHub: React.FC = () => {
   // Send Google Chat Message with direct dispatch
   const handleSendChatMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accessToken) return;
+    if (!accessToken) {
+      setErrorMessage('Please authorize Google Workspace to post messages to Chat spaces.');
+      return;
+    }
 
     setLoading(true);
+    setErrorMessage(null);
     try {
       const endpoint = selectedSpace
         ? `https://chat.googleapis.com/v1/${selectedSpace}/messages`
@@ -218,8 +215,8 @@ export const WorkspaceHub: React.FC = () => {
       });
 
       if (!res.ok) {
-        window.open('https://chat.google.com/', '_blank');
-        setStatusMessage('Opened Google Chat web app to post your message.');
+        setStatusMessage('Google Chat space permissions required. Copied message text to clipboard for quick paste in Google Chat.');
+        navigator.clipboard?.writeText(chatMessageText);
         setTimeout(() => setStatusMessage(null), 5000);
         return;
       }
@@ -227,8 +224,9 @@ export const WorkspaceHub: React.FC = () => {
       setStatusMessage('Chat message posted to Google Chat space!');
       setTimeout(() => setStatusMessage(null), 4000);
     } catch (err: any) {
-      window.open('https://chat.google.com/', '_blank');
-      setStatusMessage('Opened Google Chat web app with your message copied.');
+      console.warn('Chat dispatch error:', err);
+      navigator.clipboard?.writeText(chatMessageText);
+      setStatusMessage('Copied message text to clipboard for Google Chat.');
       setTimeout(() => setStatusMessage(null), 5000);
     } finally {
       setLoading(false);
