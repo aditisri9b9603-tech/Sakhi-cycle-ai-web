@@ -14,10 +14,11 @@ export const isFirebaseConfigured = Boolean(
 // Initialize Firebase App
 export const firebaseApp = isFirebaseConfigured
   ? (getApps().length === 0 ? initializeApp(firebaseConfig) : getApp())
-  : null;
+  : (getApps().length > 0 ? getApp() : initializeApp(firebaseConfig));
 
 // Initialize Firebase Auth
-export const firebaseAuth = firebaseApp ? getAuth(firebaseApp) : null;
+export const auth = getAuth(firebaseApp);
+export const firebaseAuth = auth;
 
 // Initialize Google Auth Provider for basic user authentication (fast, zero permission hurdles)
 export const googleAuthProvider = new GoogleAuthProvider();

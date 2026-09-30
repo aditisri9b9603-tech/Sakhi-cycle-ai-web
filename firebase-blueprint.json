@@ -11,7 +11,10 @@
         "birthDate": { "type": "string" },
         "healthGoals": { "type": "string" },
         "photoURL": { "type": "string" },
-        "createdAt": { "type": "string" }
+        "createdAt": { "type": "string" },
+        "premium_status": { "type": "string" },
+        "membershipPlan": { "type": "string" },
+        "premium_activated_at": { "type": "string" }
       },
       "required": ["email", "displayName"]
     },

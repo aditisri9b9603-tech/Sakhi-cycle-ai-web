@@ -123,6 +123,7 @@ export interface AuthUser {
   displayName?: string;
   photoURL?: string;
   isGuest?: boolean;
+  emailVerified?: boolean;
   provider?: 'google' | 'email' | 'guest';
   createdAt?: string;
 }
@@ -147,6 +148,9 @@ export interface UserProfile {
   healthGoals?: string;
   photoURL?: string;
   createdAt?: string;
+  premium_status?: string;
+  membershipPlan?: string;
+  premium_activated_at?: string;
 }
 
 export interface CycleModel {

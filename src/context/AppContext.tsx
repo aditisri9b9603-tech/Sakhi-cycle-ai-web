@@ -327,7 +327,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const userSnap = await getDoc(userDocRef);
           if (userSnap.exists() && !isCancelled) {
             const uData = userSnap.data();
-            setUserProfile({
+            const profileData: UserProfile = {
               uid: currentUserId,
               email: uData.email || user?.email || '',
               displayName: uData.displayName || user?.displayName || 'Sakhi Member',
@@ -335,7 +335,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               healthGoals: uData.healthGoals || 'Regular rhythm, balanced energy, cramp relief',
               photoURL: uData.photoURL || user?.photoURL || '',
               createdAt: uData.createdAt || '',
-            });
+              premium_status: uData.premium_status || 'free',
+              membershipPlan: uData.membershipPlan || '',
+              premium_activated_at: uData.premium_activated_at || '',
+            };
+            setUserProfile(profileData);
+
+            if (uData.premium_status === 'premium' || uData.premium_status === 'active') {
+              setIsPremiumMember(true);
+              setMembershipPlan((uData.membershipPlan as 'monthly' | 'annual') || 'monthly');
+              localStorage.setItem('sakhi_premium_active', 'true');
+              localStorage.setItem('sakhi_premium_plan', uData.membershipPlan || 'monthly');
+            }
           } else if (!isCancelled) {
             // Initialize basic profile from auth
             const initialProfile: UserProfile = {
@@ -345,6 +356,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               birthDate: '',
               healthGoals: 'Regular rhythm, balanced energy, cramp relief',
               photoURL: user?.photoURL || '',
+              premium_status: 'free',
             };
             setUserProfile(initialProfile);
             setDoc(userDocRef, initialProfile, { merge: true }).catch(() => {});
@@ -903,6 +915,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Save to Firestore
     if (activeProvider === 'firebase' && firestore) {
       try {
+        // 1. Update user's profile document with premium_status
+        const userDocRef = doc(firestore, 'users', currentUserId);
+        await setDoc(
+          userDocRef,
+          {
+            premium_status: 'premium',
+            membershipPlan: planId,
+            premium_activated_at: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
+        // Update local userProfile state in memory
+        setUserProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                premium_status: 'premium',
+                membershipPlan: planId,
+                premium_activated_at: new Date().toISOString(),
+              }
+            : null
+        );
+
+        // 2. Update membership subcollection
         const memberRef = doc(firestore, 'users', currentUserId, 'membership', 'current');
         await setDoc(memberRef, {
           userId: currentUserId,
@@ -914,7 +952,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lastOrderId: details.orderId,
         });
 
-        // Add to payments log
+        // 3. Add to payments log subcollection
         const paymentRef = doc(firestore, 'users', currentUserId, 'payments', details.paymentId);
         await setDoc(paymentRef, {
           userId: currentUserId,

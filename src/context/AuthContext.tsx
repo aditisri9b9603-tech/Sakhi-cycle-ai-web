@@ -15,6 +15,8 @@ import {
   signInWithPhoneNumber,
   ConfirmationResult,
   updateProfile,
+  sendPasswordResetEmail,
+  sendEmailVerification,
   User as FirebaseUser,
   Auth,
 } from 'firebase/auth';
@@ -31,8 +33,18 @@ import {
 } from '../lib/firebaseClient';
 import { doc, setDoc } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+import {
+  signInWithEmail as fbSignInWithEmail,
+  createEmailAccount as fbCreateEmailAccount,
+  resetEmailPassword as fbResetEmailPassword,
+  signInWithGoogle as fbSignInWithGoogle,
+  signOutUser as fbSignOutUser,
+  signInWithPhone as fbSignInWithPhone,
+  verifyPhoneCode as fbVerifyPhoneCode,
+  getSignInError,
+} from '../lib/auth';
 
-export { firebaseApp, auth, isFirebaseConfigured, googleAuthProvider };
+export { firebaseApp, auth, isFirebaseConfigured, googleAuthProvider, getSignInError };
 export const firebaseAuth = auth; // Alias for backward compatibility
 
 // Unified User interface compatible across the app
@@ -44,6 +56,7 @@ export interface AuthUser {
   displayName: string | null;
   photoURL: string | null;
   isAnonymous?: boolean;
+  emailVerified?: boolean;
   provider?: 'firebase' | 'supabase' | 'local';
 }
 
@@ -67,12 +80,15 @@ export interface AuthContextType {
   signInWithGoogleAccount: (googleEmail?: string, displayName?: string) => Promise<boolean>;
   signInWithEmail: (email: string, pass: string) => Promise<boolean>;
   registerWithEmail: (email: string, pass: string, name?: string) => Promise<boolean>;
+  sendPasswordReset: (email: string) => Promise<{ success: boolean; message: string }>;
+  resendVerificationEmail: () => Promise<{ success: boolean; message: string }>;
   signInWithPhone: (phone: string, containerId?: string) => Promise<boolean>;
   verifyPhoneOtp: (code: string) => Promise<boolean>;
   phoneConfirmationPending: boolean;
   signInWithOtp: (email: string) => Promise<boolean>;
   signInAsGuest: () => Promise<boolean>;
   logout: () => Promise<void>;
+  getSignInError: (error: unknown) => string;
   accessToken: string | null;
   hasWorkspaceAuth: boolean;
   isFirebaseConnected: boolean;
@@ -125,6 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       displayName: fu.displayName || fu.email?.split('@')[0] || (fu.phoneNumber ? `User ${fu.phoneNumber.slice(-4)}` : 'Sakhi Member'),
       photoURL: fu.photoURL || null,
       isAnonymous: fu.isAnonymous,
+      emailVerified: fu.emailVerified,
       provider: 'firebase',
     };
   };
@@ -140,6 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       displayName: metadata.full_name || metadata.name || su.email?.split('@')[0] || 'Sakhi Member',
       photoURL: metadata.avatar_url || metadata.picture || null,
       isAnonymous: false,
+      emailVerified: Boolean(su.confirmed_at || su.email_confirmed_at),
       provider: 'supabase',
     };
   };
@@ -230,25 +248,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           setCachedAccessToken(null);
           setAccessToken(null);
-          // Check for active Google account session or local guest
-          const savedGoogleUser = localStorage.getItem(LOCAL_STORAGE_GOOGLE_USER_KEY);
-          if (savedGoogleUser) {
+          const savedGuest = localStorage.getItem(LOCAL_STORAGE_GUEST_KEY);
+          if (savedGuest) {
             try {
-              setUser(JSON.parse(savedGoogleUser));
+              setUser(JSON.parse(savedGuest));
             } catch {
               setUser(null);
             }
           } else {
-            const savedGuest = localStorage.getItem(LOCAL_STORAGE_GUEST_KEY);
-            if (savedGuest) {
-              try {
-                setUser(JSON.parse(savedGuest));
-              } catch {
-                setUser(null);
-              }
-            } else {
-              setUser(null);
-            }
+            setUser(null);
           }
         }
         setLoading(false);
@@ -332,138 +340,76 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
-   * Dynamic / Verified Account Sign-In
-   * Provisions user profile in Firestore and sets authenticated session
+   * 1. Google Sign-In via Firebase
+   * Uses fbSignInWithGoogle from src/lib/auth.ts (real popup sign-in, persistence guaranteed)
    */
-  const signInWithGoogleAccount = async (
-    googleEmail: string = 'aditisri991177@gmail.com',
-    displayName?: string
-  ): Promise<boolean> => {
+  const signInWithGoogle = async (): Promise<boolean> => {
     setIsSigningIn(true);
     clearAuthError();
     clearAuthNotice();
 
     try {
-      const sanitizedEmail = (googleEmail || 'aditisri991177@gmail.com').trim().toLowerCase();
-      const extractedName =
-        displayName?.trim() ||
-        (sanitizedEmail.includes('aditi')
-          ? 'Aditi'
-          : sanitizedEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
-
-      // Deterministic UID for this account
-      const cleanUid = `user_${sanitizedEmail.replace(/[^a-zA-Z0-9]/g, '_')}`;
-
-      const googleUserObj: AuthUser = {
-        id: cleanUid,
-        uid: cleanUid,
-        email: sanitizedEmail,
-        displayName: extractedName,
-        photoURL: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(extractedName)}&backgroundColor=e25574,f4a6b8`,
-        isAnonymous: false,
-        provider: 'firebase',
-      };
-
-      // Persist in localStorage so it stays active across reloads
-      localStorage.setItem(LOCAL_STORAGE_GOOGLE_USER_KEY, JSON.stringify(googleUserObj));
-      localStorage.removeItem(LOCAL_STORAGE_GUEST_KEY);
-      setUser(googleUserObj);
-
-      // Persist to Cloud Firestore if connected
-      if (firestore) {
-        try {
-          const userDocRef = doc(firestore, 'users', cleanUid);
-          await setDoc(
-            userDocRef,
-            {
-              uid: cleanUid,
-              email: sanitizedEmail,
-              displayName: extractedName,
-              provider: 'google.com',
-              isGoogleAuth: true,
-              lastLoginAt: new Date().toISOString(),
-              healthGoals: 'Hormonal balance, symptom tracking, inner peace',
-            },
-            { merge: true }
-          );
-        } catch (dbErr) {
-          console.warn('Firestore user profile sync notice:', dbErr);
+      const result = await fbSignInWithGoogle();
+      if (result?.user) {
+        const userObj = mapFirebaseUser(result.user);
+        setUser(userObj);
+        const cred = GoogleAuthProvider.credentialFromResult(result);
+        if (cred?.accessToken) {
+          setCachedAccessToken(cred.accessToken);
+          setAccessToken(cred.accessToken);
         }
+        if (firestore) {
+          try {
+            await setDoc(
+              doc(firestore, 'users', result.user.uid),
+              {
+                uid: result.user.uid,
+                email: result.user.email,
+                displayName: result.user.displayName,
+                photoURL: result.user.photoURL,
+                updatedAt: new Date().toISOString(),
+              },
+              { merge: true }
+            );
+          } catch (dbErr) {
+            console.warn('Firestore profile sync notice:', dbErr);
+          }
+        }
+        setAuthNotice(`Signed in with Google as ${userObj?.displayName || userObj?.email || 'Google User'}`);
+        setIsSigningIn(false);
+        return true;
       }
-
-      setAuthNotice(`Signed in as ${extractedName} (${sanitizedEmail})`);
-      setIsSigningIn(false);
-      return true;
-    } catch (err: any) {
-      console.error('Account sign-in error:', err);
+    } catch (popupErr: any) {
+      console.warn('Google sign-in notice:', popupErr);
+      const friendlyMessage = getSignInError(popupErr);
+      let guide: string[] | undefined;
+      if (popupErr?.code === 'auth/unauthorized-domain' && typeof window !== 'undefined') {
+        guide = [
+          'Go to Firebase Console → Authentication → Settings → Authorized domains.',
+          `Add "${window.location.hostname}" to authorized domains list.`,
+          'Open the app in a new browser tab and try again.',
+        ];
+      } else if (popupErr?.code === 'auth/popup-blocked') {
+        guide = ['Allow pop-ups for this site or open the app in a new browser tab.'];
+      }
       setAuthError({
-        title: 'Sign In Notice',
-        message: err?.message || 'Could not complete sign-in.',
+        title: 'Google Sign-In Failed',
+        message: friendlyMessage,
+        actionableGuide: guide,
       });
       setIsSigningIn(false);
       return false;
     }
+
+    setIsSigningIn(false);
+    return false;
   };
 
-  /**
-   * 1. Google Sign-In via Firebase
-   * Uses signInWithPopup with auth and googleAuthProvider, falling back to dynamic Google account sign-in
-   */
-  const signInWithGoogle = async (optionalEmail?: string): Promise<boolean> => {
-    setIsSigningIn(true);
-    clearAuthError();
-    clearAuthNotice();
-
-    if (auth) {
-      try {
-        // Execute signInWithPopup with auth and GoogleAuthProvider
-        const result = await signInWithPopup(auth, googleAuthProvider);
-        if (result?.user) {
-          const userObj = mapFirebaseUser(result.user);
-          setUser(userObj);
-          if (userObj) {
-            localStorage.setItem(LOCAL_STORAGE_GOOGLE_USER_KEY, JSON.stringify(userObj));
-          }
-          const cred = GoogleAuthProvider.credentialFromResult(result);
-          if (cred?.accessToken) {
-            setCachedAccessToken(cred.accessToken);
-            setAccessToken(cred.accessToken);
-          }
-          setAuthNotice(`Signed in as ${userObj?.displayName || userObj?.email || 'Google User'}`);
-          setIsSigningIn(false);
-          return true;
-        }
-      } catch (popupErr: any) {
-        console.warn('Firebase popup sign-in encountered an environment limitation:', popupErr?.code, popupErr?.message);
-
-        // In sandboxed previews or iframes where popups are blocked or domain is unauthorized:
-        // Automatically and dynamically sign in as the verified Google account!
-        const targetEmail = optionalEmail || 'aditisri991177@gmail.com';
-        const targetName = targetEmail.includes('aditi') ? 'Aditi' : targetEmail.split('@')[0];
-
-        console.info(`Switching to dynamic Google account authentication (${targetEmail})...`);
-        const ok = await signInWithGoogleAccount(targetEmail, targetName);
-        if (ok) {
-          if (popupErr.code === 'auth/unauthorized-domain' && typeof window !== 'undefined') {
-            setAuthNotice(`Signed in as ${targetName}! (Tip: To use native Google popup on Vercel, add ${window.location.hostname} to Firebase Console → Authentication → Settings → Authorized domains)`);
-          }
-          return true;
-        }
-
-        setAuthError({
-          title: 'Google Sign-In Error',
-          message: popupErr.message || 'Could not complete Google sign-in.',
-        });
-        setIsSigningIn(false);
-        return false;
-      }
-    }
-
-    // Dynamic Google Account sign in if auth client is restricted
-    return await signInWithGoogleAccount(optionalEmail || 'aditisri991177@gmail.com', 'Aditi');
+  const signInWithGoogleAccount = async (): Promise<boolean> => {
+    return signInWithGoogle();
   };
 
-  // 2. Email & Password Sign-In
+  // 2. Email & Password Sign-In (Real Provider Logic, No Faking)
   const signInWithEmail = async (email: string, pass: string): Promise<boolean> => {
     setIsSigningIn(true);
     clearAuthError();
@@ -471,57 +417,124 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const sanitizedEmail = email.trim().toLowerCase();
 
-    if (auth) {
+    // Client-side validation
+    if (!sanitizedEmail || !sanitizedEmail.includes('@') || !sanitizedEmail.includes('.')) {
+      setAuthError({
+        title: 'Invalid Email Address',
+        message: 'Please provide a valid email address (e.g. name@example.com).',
+      });
+      setIsSigningIn(false);
+      return false;
+    }
+
+    if (!pass || pass.length < 6) {
+      setAuthError({
+        title: 'Password Too Short',
+        message: 'Password must be at least 6 characters.',
+      });
+      setIsSigningIn(false);
+      return false;
+    }
+
+    // --- CASE 1: FIREBASE AUTH ---
+    if (activeProvider === 'firebase') {
       try {
-        const cred = await signInWithEmailAndPassword(auth, sanitizedEmail, pass);
+        const cred = await fbSignInWithEmail(sanitizedEmail, pass);
         if (cred.user) {
-          setUser(mapFirebaseUser(cred.user));
-          setAuthNotice(`Signed in as ${cred.user.email}`);
+          const userObj = mapFirebaseUser(cred.user);
+          setUser(userObj);
+          if (!cred.user.emailVerified) {
+            setAuthNotice(
+              `Signed in as ${cred.user.email}. Notice: Email is not yet verified. Please check your inbox or resend verification.`
+            );
+          } else {
+            setAuthNotice(`Welcome back! Signed in as ${cred.user.email}`);
+          }
           setIsSigningIn(false);
           return true;
         }
       } catch (err: any) {
-        console.warn('Firebase email sign-in notice:', err?.code, err?.message);
-        // If email/password provider is not activated in Firebase console, or unauthorized domain:
-        // Gracefully sign in with their email so the user is never blocked!
-        if (
-          err.code === 'auth/operation-not-allowed' ||
-          err.code === 'auth/unauthorized-domain' ||
-          err.code === 'auth/admin-restricted-operation'
-        ) {
-          console.info('Firebase Email/Password provider not active; authenticating with verified session...');
-          return await signInWithGoogleAccount(sanitizedEmail, sanitizedEmail.split('@')[0]);
-        }
+        console.warn('Firebase email sign-in error:', err?.code, err?.message);
+        const friendlyMessage = getSignInError(err);
+        let guide: string[] | undefined;
 
-        if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
-          // If no account found, let them sign in directly with their email!
-          return await signInWithGoogleAccount(sanitizedEmail, sanitizedEmail.split('@')[0]);
-        }
-
-        let msg = err.message || 'Invalid email or password.';
-        if (err.code === 'auth/wrong-password') {
-          msg = 'Incorrect password. Please try again.';
-        } else if (err.code === 'auth/too-many-requests') {
-          msg = 'Too many failed login attempts. Try again later or use Instant Google Sign-in.';
+        if (err?.code === 'auth/operation-not-allowed') {
+          guide = [
+            'Go to Firebase Console (https://console.firebase.google.com).',
+            `Open project: ${firebaseConfig.projectId}.`,
+            'Navigate to Authentication → Sign-in method.',
+            'Click "Email/Password" and toggle "Enable" (keep Email link optional).',
+            'Save changes and retry signing in.',
+          ];
+        } else if (err?.code === 'auth/unauthorized-domain' && typeof window !== 'undefined') {
+          guide = [
+            'Go to Firebase Console → Authentication → Settings → Authorized domains.',
+            `Add domain: ${window.location.hostname}`,
+            'Save and retry.',
+          ];
         }
 
         setAuthError({
-          title: 'Sign In Notice',
-          message: msg,
-          actionableGuide: [
-            'You can also sign in directly using Google Sign-In with one click.',
-          ],
+          title: 'Sign-In Failed',
+          message: friendlyMessage,
+          actionableGuide: guide,
         });
         setIsSigningIn(false);
         return false;
       }
     }
 
-    // Fallback: authenticate with email directly
-    return await signInWithGoogleAccount(sanitizedEmail, sanitizedEmail.split('@')[0]);
+    // --- CASE 2: SUPABASE AUTH ---
+    if (activeProvider === 'supabase' && isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: sanitizedEmail,
+          password: pass,
+        });
+
+        if (error) {
+          let guide: string[] | undefined;
+          if (error.message.includes('Email not confirmed')) {
+            guide = [
+              'Please check your email inbox and click the confirmation link.',
+              'To ensure emails reach all users in Supabase, configure custom SMTP in Project Settings → Authentication → SMTP.',
+            ];
+          }
+          setAuthError({
+            title: 'Sign In Failed',
+            message: error.message,
+            actionableGuide: guide,
+          });
+          setIsSigningIn(false);
+          return false;
+        }
+
+        if (data.user) {
+          setUser(mapSupabaseUser(data.user));
+          setAuthNotice(`Signed in as ${data.user.email}`);
+          setIsSigningIn(false);
+          return true;
+        }
+      } catch (err: any) {
+        setAuthError({
+          title: 'Sign In Failed',
+          message: err.message || 'Supabase authentication failed.',
+        });
+        setIsSigningIn(false);
+        return false;
+      }
+    }
+
+    // Provider not configured
+    setAuthError({
+      title: 'Authentication Service Unavailable',
+      message: 'Authentication provider is not configured. Please check Firebase or Supabase settings.',
+    });
+    setIsSigningIn(false);
+    return false;
   };
 
-  // 3. Register with Email & Password
+  // 3. Register with Email & Password (Real Account Creation)
   const registerWithEmail = async (email: string, pass: string, name?: string): Promise<boolean> => {
     setIsSigningIn(true);
     clearAuthError();
@@ -530,46 +543,220 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const sanitizedEmail = email.trim().toLowerCase();
     const displayName = name?.trim() || sanitizedEmail.split('@')[0];
 
-    if (auth) {
+    // Client-side validation
+    if (!sanitizedEmail || !sanitizedEmail.includes('@') || !sanitizedEmail.includes('.')) {
+      setAuthError({
+        title: 'Invalid Email Address',
+        message: 'Please provide a valid email address.',
+      });
+      setIsSigningIn(false);
+      return false;
+    }
+
+    if (!pass || pass.length < 6) {
+      setAuthError({
+        title: 'Weak Password',
+        message: 'Password must be at least 6 characters long.',
+      });
+      setIsSigningIn(false);
+      return false;
+    }
+
+    // --- CASE 1: FIREBASE AUTH ---
+    if (activeProvider === 'firebase') {
       try {
-        const cred = await createUserWithEmailAndPassword(auth, sanitizedEmail, pass);
+        const cred = await fbCreateEmailAccount(sanitizedEmail, pass);
         if (cred.user) {
-          if (name) {
+          if (displayName) {
             await updateProfile(cred.user, { displayName }).catch(() => {});
           }
+
+          // Send verification email to user
+          try {
+            await sendEmailVerification(cred.user);
+          } catch (verErr) {
+            console.warn('Could not dispatch verification email:', verErr);
+          }
+
+          // Provision user profile in Firestore
+          if (firestore) {
+            try {
+              await setDoc(doc(firestore, 'users', cred.user.uid), {
+                uid: cred.user.uid,
+                email: sanitizedEmail,
+                displayName,
+                emailVerified: false,
+                createdAt: new Date().toISOString(),
+                healthGoals: 'Hormonal balance, symptom tracking, inner peace',
+              }, { merge: true });
+            } catch (dbErr) {
+              console.warn('Firestore profile sync notice:', dbErr);
+            }
+          }
+
           const userObj = mapFirebaseUser(cred.user);
           if (userObj) userObj.displayName = displayName;
           setUser(userObj);
-          setAuthNotice(`Welcome to Sakhi Cycle, ${displayName}!`);
+          setAuthNotice(
+            `Welcome to Sakhi Cycle, ${displayName}! A verification email has been sent to ${sanitizedEmail}.`
+          );
           setIsSigningIn(false);
           return true;
         }
       } catch (err: any) {
-        console.warn('Firebase registration notice:', err?.code, err?.message);
-        // If email/password provider is not activated in Firebase console, or unauthorized domain:
-        // Gracefully create the account session so user can start tracking immediately!
-        if (
-          err.code === 'auth/operation-not-allowed' ||
-          err.code === 'auth/unauthorized-domain' ||
-          err.code === 'auth/admin-restricted-operation' ||
-          err.code === 'auth/email-already-in-use'
-        ) {
-          console.info('Firebase Email/Password provider not active; creating account session...');
-          return await signInWithGoogleAccount(sanitizedEmail, displayName);
+        console.warn('Firebase registration error:', err?.code, err?.message);
+        const friendlyMessage = getSignInError(err);
+        let guide: string[] | undefined;
+
+        if (err?.code === 'auth/operation-not-allowed') {
+          guide = [
+            'Go to Firebase Console (https://console.firebase.google.com).',
+            `Select project: ${firebaseConfig.projectId}.`,
+            'Navigate to Authentication → Sign-in method.',
+            'Click "Email/Password" and toggle "Enable".',
+            'Save changes and retry creating your account.',
+          ];
+        } else if (err?.code === 'auth/unauthorized-domain' && typeof window !== 'undefined') {
+          guide = [
+            'Go to Firebase Console → Authentication → Settings → Authorized domains.',
+            `Add domain: ${window.location.hostname}`,
+            'Save and retry.',
+          ];
         }
 
-        let msg = err.message || 'Could not create account.';
         setAuthError({
-          title: 'Registration Notice',
-          message: msg,
+          title: 'Registration Failed',
+          message: friendlyMessage,
+          actionableGuide: guide,
         });
         setIsSigningIn(false);
         return false;
       }
     }
 
-    // Fallback: create account directly
-    return await signInWithGoogleAccount(sanitizedEmail, displayName);
+    // --- CASE 2: SUPABASE AUTH ---
+    if (activeProvider === 'supabase' && isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email: sanitizedEmail,
+          password: pass,
+          options: {
+            data: { full_name: displayName },
+          },
+        });
+
+        if (error) {
+          setAuthError({
+            title: 'Registration Failed',
+            message: error.message,
+            actionableGuide: [
+              'If confirmation emails do not arrive, configure custom SMTP in Supabase Project Settings → Authentication → SMTP.',
+            ],
+          });
+          setIsSigningIn(false);
+          return false;
+        }
+
+        if (data.user) {
+          setUser(mapSupabaseUser(data.user));
+          setAuthNotice(
+            `Account created for ${displayName}! Please check ${sanitizedEmail} for confirmation email.`
+          );
+          setIsSigningIn(false);
+          return true;
+        }
+      } catch (err: any) {
+        setAuthError({
+          title: 'Registration Failed',
+          message: err.message || 'Supabase account creation failed.',
+        });
+        setIsSigningIn(false);
+        return false;
+      }
+    }
+
+    setAuthError({
+      title: 'Authentication Service Unavailable',
+      message: 'Firebase Authentication is required to create an account.',
+    });
+    setIsSigningIn(false);
+    return false;
+  };
+
+  // 4. Send Password Reset Email ("Forgot Password?" Flow)
+  const sendPasswordReset = async (email: string): Promise<{ success: boolean; message: string }> => {
+    const sanitizedEmail = email.trim().toLowerCase();
+    if (!sanitizedEmail || !sanitizedEmail.includes('@') || !sanitizedEmail.includes('.')) {
+      return { success: false, message: 'Please enter a valid email address.' };
+    }
+
+    // Firebase
+    if (activeProvider === 'firebase') {
+      try {
+        await fbResetEmailPassword(sanitizedEmail);
+        return {
+          success: true,
+          message: `A password reset link has been sent to ${sanitizedEmail}. Please check your inbox and spam folder.`,
+        };
+      } catch (err: any) {
+        console.warn('Firebase reset password notice:', err?.code, err?.message);
+        return {
+          success: false,
+          message: getSignInError(err),
+        };
+      }
+    }
+
+    // Supabase
+    if (activeProvider === 'supabase' && isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase.auth.resetPasswordForEmail(sanitizedEmail);
+        if (error) throw error;
+        return {
+          success: true,
+          message: `Password reset instructions sent to ${sanitizedEmail}.`,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          message: err.message || 'Supabase password reset failed.',
+        };
+      }
+    }
+
+    return {
+      success: false,
+      message: 'Authentication provider is not configured.',
+    };
+  };
+
+  // 5. Resend Email Verification
+  const resendVerificationEmail = async (): Promise<{ success: boolean; message: string }> => {
+    if (activeProvider === 'firebase' && auth?.currentUser) {
+      try {
+        await sendEmailVerification(auth.currentUser);
+        return {
+          success: true,
+          message: `Verification email resent to ${auth.currentUser.email}. Please check your inbox.`,
+        };
+      } catch (err: any) {
+        if (err.code === 'auth/too-many-requests') {
+          return {
+            success: false,
+            message: 'Please wait a minute before requesting another verification email.',
+          };
+        }
+        return {
+          success: false,
+          message: err.message || 'Could not send verification email.',
+        };
+      }
+    }
+
+    return {
+      success: false,
+      message: 'No active user session found to verify.',
+    };
   };
 
   // 4. Phone Authentication via Firebase
@@ -606,8 +793,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         }
 
-        const confirmation = await signInWithPhoneNumber(
-          auth,
+        const confirmation = await fbSignInWithPhone(
           formattedPhone,
           recaptchaVerifierRef.current
         );
@@ -626,13 +812,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           recaptchaVerifierRef.current = null;
         }
 
-        let msg = err.message || 'Could not send SMS verification code.';
-        if (err.code === 'auth/invalid-phone-number') {
-          msg = 'Invalid phone number format. Please include your country code (e.g. +91 9876543210).';
-        } else if (err.code === 'auth/too-many-requests') {
-          msg = 'SMS quota or rate limit exceeded. Please wait or use Google sign-in.';
-        }
-
+        const msg = getSignInError(err);
         setAuthError({
           title: 'Phone Authentication Error',
           message: msg,
@@ -666,7 +846,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setIsSigningIn(true);
     try {
-      const result = await confirmationResultRef.current.confirm(code);
+      const result = await fbVerifyPhoneCode(confirmationResultRef.current, code.trim());
       if (result.user) {
         setUser(mapFirebaseUser(result.user));
         setPhoneConfirmationPending(false);
@@ -679,7 +859,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Phone OTP verification error:', err);
       setAuthError({
         title: 'Verification Failed',
-        message: err.message || 'Invalid verification code. Please check and retry.',
+        message: getSignInError(err),
       });
       setIsSigningIn(false);
       return false;
@@ -756,12 +936,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 7. Logout
   const logout = async (): Promise<void> => {
-    if (auth) {
-      try {
-        await fbSignOut(auth);
-      } catch (err) {
-        console.warn('Firebase signOut error:', err);
-      }
+    setIsSigningIn(true);
+    try {
+      await fbSignOutUser();
+    } catch (err) {
+      console.warn('Firebase signOut error:', err);
     }
 
     if (activeProvider === 'supabase' && supabase) {
@@ -782,6 +961,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     confirmationResultRef.current = null;
     clearAuthNotice();
     clearAuthError();
+    setIsSigningIn(false);
   };
 
   const hasWorkspaceAuth = Boolean(accessToken || user?.email);
@@ -802,12 +982,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signInWithGoogleAccount,
         signInWithEmail,
         registerWithEmail,
+        sendPasswordReset,
+        resendVerificationEmail,
         signInWithPhone,
         verifyPhoneOtp,
         phoneConfirmationPending,
         signInWithOtp,
         signInAsGuest,
         logout,
+        getSignInError,
         accessToken,
         hasWorkspaceAuth,
         isFirebaseConnected: isFirebaseConfigured,

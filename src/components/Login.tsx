@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
+import { getSignInError } from '../lib/auth';
 import {
   Lock,
   Mail,
@@ -15,9 +16,11 @@ import {
   ShieldCheck,
   X,
   LogOut,
-  RefreshCw,
   Database,
   Crown,
+  Send,
+  Phone,
+  KeyRound,
 } from 'lucide-react';
 import { IMAGES } from '../assets/images';
 
@@ -42,9 +45,13 @@ export const Login: React.FC<LoginProps> = ({
     user,
     isSigningIn,
     signInWithGoogle,
-    signInWithGoogleAccount,
     signInWithEmail,
     registerWithEmail,
+    sendPasswordReset,
+    resendVerificationEmail,
+    signInWithPhone,
+    verifyPhoneOtp,
+    phoneConfirmationPending,
     signInAsGuest,
     logout,
     authNotice,
@@ -55,15 +62,18 @@ export const Login: React.FC<LoginProps> = ({
 
   const { setActiveSection, isPremiumMember, membershipPlan } = useApp();
 
-  const [authMode, setAuthMode] = useState<'signin' | 'register'>('signin');
+  const [authMode, setAuthMode] = useState<'signin' | 'register' | 'forgot' | 'phone'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [otpCode, setOtpCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [localFeedback, setLocalFeedback] = useState<string | null>(null);
-
-  const [customGoogleEmail, setCustomGoogleEmail] = useState('aditisri991177@gmail.com');
-  const [showCustomGoogleInput, setShowCustomGoogleInput] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [localFeedback, setLocalFeedback] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [phoneSubmitting, setPhoneSubmitting] = useState(false);
 
   const handlePostAuthSuccess = () => {
     if (onSuccess) {
@@ -76,19 +86,13 @@ export const Login: React.FC<LoginProps> = ({
     clearAuthError();
     clearAuthNotice();
     setLocalFeedback(null);
-    const ok = await signInWithGoogle(customGoogleEmail || 'aditisri991177@gmail.com');
-    if (ok) {
-      handlePostAuthSuccess();
-    }
-  };
-
-  const handleDirectGoogleSignIn = async (emailToUse: string = 'aditisri991177@gmail.com') => {
-    clearAuthError();
-    clearAuthNotice();
-    setLocalFeedback(null);
-    const ok = await signInWithGoogleAccount(emailToUse, emailToUse.includes('aditi') ? 'Aditi' : undefined);
-    if (ok) {
-      handlePostAuthSuccess();
+    try {
+      const ok = await signInWithGoogle();
+      if (ok) {
+        handlePostAuthSuccess();
+      }
+    } catch (err) {
+      setLocalFeedback({ type: 'error', message: getSignInError(err) });
     }
   };
 
@@ -98,20 +102,141 @@ export const Login: React.FC<LoginProps> = ({
     clearAuthNotice();
     setLocalFeedback(null);
 
-    if (authMode === 'signin') {
-      const ok = await signInWithEmail(email, password);
-      if (ok) {
-        handlePostAuthSuccess();
+    const trimmedEmail = email.trim().toLowerCase();
+
+    // Client-side validation
+    if (!trimmedEmail || !trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
+      setLocalFeedback({ type: 'error', message: 'Please enter a valid email address.' });
+      return;
+    }
+
+    // FORGOT PASSWORD MODE
+    if (authMode === 'forgot') {
+      try {
+        const res = await sendPasswordReset(trimmedEmail);
+        if (res.success) {
+          setLocalFeedback({ type: 'success', message: res.message });
+        } else {
+          setLocalFeedback({ type: 'error', message: res.message });
+        }
+      } catch (err) {
+        setLocalFeedback({ type: 'error', message: getSignInError(err) });
       }
-    } else {
-      if (!displayName.trim()) {
-        setLocalFeedback('Please enter your name.');
+      return;
+    }
+
+    // SIGN IN MODE
+    if (authMode === 'signin') {
+      if (!password) {
+        setLocalFeedback({ type: 'error', message: 'Please enter your password.' });
         return;
       }
-      const ok = await registerWithEmail(email, password, displayName);
+      try {
+        const ok = await signInWithEmail(trimmedEmail, password);
+        if (ok) {
+          handlePostAuthSuccess();
+        }
+      } catch (err) {
+        setLocalFeedback({ type: 'error', message: getSignInError(err) });
+      }
+      return;
+    }
+
+    // CREATE ACCOUNT MODE
+    if (authMode === 'register') {
+      if (!displayName.trim()) {
+        setLocalFeedback({ type: 'error', message: 'Please enter your name.' });
+        return;
+      }
+      if (!password || password.length < 6) {
+        setLocalFeedback({ type: 'error', message: 'Password must be at least 6 characters long.' });
+        return;
+      }
+      if (password !== confirmPassword) {
+        setLocalFeedback({ type: 'error', message: 'Passwords do not match. Please re-enter.' });
+        return;
+      }
+
+      try {
+        const ok = await registerWithEmail(trimmedEmail, password, displayName.trim());
+        if (ok) {
+          handlePostAuthSuccess();
+        }
+      } catch (err) {
+        setLocalFeedback({ type: 'error', message: getSignInError(err) });
+      }
+    }
+  };
+
+  const handleSendPhoneCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearAuthError();
+    clearAuthNotice();
+    setLocalFeedback(null);
+
+    const formatted = phoneNumber.trim();
+    if (!formatted || formatted.length < 8) {
+      setLocalFeedback({
+        type: 'error',
+        message: 'Please enter a valid phone number with country code (e.g., +91 9876543210).',
+      });
+      return;
+    }
+
+    setPhoneSubmitting(true);
+    try {
+      const ok = await signInWithPhone(formatted);
+      if (ok) {
+        setLocalFeedback({
+          type: 'success',
+          message: '6-digit SMS verification code sent. Please enter it below.',
+        });
+      }
+    } catch (err) {
+      setLocalFeedback({ type: 'error', message: getSignInError(err) });
+    } finally {
+      setPhoneSubmitting(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearAuthError();
+    clearAuthNotice();
+    setLocalFeedback(null);
+
+    if (!otpCode.trim() || otpCode.trim().length < 6) {
+      setLocalFeedback({ type: 'error', message: 'Please enter the 6-digit verification code.' });
+      return;
+    }
+
+    setPhoneSubmitting(true);
+    try {
+      const ok = await verifyPhoneOtp(otpCode.trim());
       if (ok) {
         handlePostAuthSuccess();
       }
+    } catch (err) {
+      setLocalFeedback({ type: 'error', message: getSignInError(err) });
+    } finally {
+      setPhoneSubmitting(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setResendingEmail(true);
+    setLocalFeedback(null);
+    try {
+      const res = await resendVerificationEmail();
+      if (res.success) {
+        setLocalFeedback({ type: 'success', message: res.message });
+      } else {
+        setLocalFeedback({ type: 'error', message: res.message });
+      }
+    } catch (err) {
+      setLocalFeedback({ type: 'error', message: getSignInError(err) });
+    } finally {
+      setResendingEmail(false);
     }
   };
 
@@ -119,9 +244,13 @@ export const Login: React.FC<LoginProps> = ({
     clearAuthError();
     clearAuthNotice();
     setLocalFeedback(null);
-    const ok = await signInAsGuest();
-    if (ok) {
-      handlePostAuthSuccess();
+    try {
+      const ok = await signInAsGuest();
+      if (ok) {
+        handlePostAuthSuccess();
+      }
+    } catch (err) {
+      setLocalFeedback({ type: 'error', message: getSignInError(err) });
     }
   };
 
@@ -153,7 +282,7 @@ export const Login: React.FC<LoginProps> = ({
             />
           ) : (
             <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-[#D9658B] to-[#F4A6B8] text-white flex items-center justify-center text-xl font-bold shadow-md">
-              {user?.email?.[0].toUpperCase() || 'U'}
+              {user?.displayName?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'S'}
             </div>
           )}
           <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-[#58B988] border-2 border-white" />
@@ -163,9 +292,53 @@ export const Login: React.FC<LoginProps> = ({
           <h2 className="text-xl font-serif font-bold text-[#3D1E28]">
             {user?.displayName || 'Sakhi Cycle Member'}
           </h2>
-          <p className="text-xs text-[#7E5265] mt-0.5">{user?.email}</p>
+          <p className="text-xs text-[#7E5265] mt-0.5 font-mono">{user?.email || user?.phoneNumber || 'Member'}</p>
         </div>
       </div>
+
+      {/* Unverified Email Alert Banner if email is not verified */}
+      {user?.email && user.emailVerified === false && (
+        <div className="p-3.5 rounded-2xl bg-[#FFF8F0] border border-[#FEE2C7] text-left text-xs space-y-2">
+          <div className="flex items-center gap-1.5 text-[#B45309] font-bold">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>Email Not Verified</span>
+          </div>
+          <p className="text-[11px] text-[#7E5265] leading-relaxed">
+            Please check your email inbox for the verification link to secure your account.
+          </p>
+          <button
+            type="button"
+            onClick={handleResendVerification}
+            disabled={resendingEmail}
+            className="px-3 py-1.5 bg-white border border-[#FEE2C7] text-[#B45309] hover:bg-[#FEF3C7] rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
+          >
+            {resendingEmail ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Send className="w-3.5 h-3.5" />
+            )}
+            <span>Resend Verification Email</span>
+          </button>
+        </div>
+      )}
+
+      {/* Local Feedback */}
+      {localFeedback && (
+        <div
+          className={`p-3 rounded-2xl text-xs flex items-center gap-2 ${
+            localFeedback.type === 'success'
+              ? 'bg-[#F3FAF5] border border-[#BFE7D0] text-[#226947]'
+              : 'bg-[#FFF0F3] border border-[#F4D5DC] text-[#C54E74]'
+          }`}
+        >
+          {localFeedback.type === 'success' ? (
+            <CheckCircle className="w-4 h-4 text-[#58B988] shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-[#D9658B] shrink-0" />
+          )}
+          <span>{localFeedback.message}</span>
+        </div>
+      )}
 
       {/* Account Highlights */}
       <div className="p-4 rounded-2xl bg-[#FFF8F8] border border-[#F4D5DC] space-y-2.5 text-left text-xs">
@@ -173,15 +346,34 @@ export const Login: React.FC<LoginProps> = ({
           <span className="text-[#7E5265]">Authentication:</span>
           <span className="font-bold text-[#226947] flex items-center gap-1">
             <ShieldCheck className="w-3.5 h-3.5 text-[#58B988]" />
-            <span>Google & Firebase Auth</span>
+            <span>Authenticated ({user?.provider || 'Firebase'})</span>
           </span>
         </div>
+
+        {user?.email && (
+          <div className="flex items-center justify-between">
+            <span className="text-[#7E5265]">Email Status:</span>
+            <span className={`font-bold flex items-center gap-1 ${user?.emailVerified ? 'text-[#226947]' : 'text-[#B45309]'}`}>
+              {user?.emailVerified ? (
+                <>
+                  <CheckCircle className="w-3.5 h-3.5 text-[#58B988]" />
+                  <span>Verified</span>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="w-3.5 h-3.5 text-[#B45309]" />
+                  <span>Unverified</span>
+                </>
+              )}
+            </span>
+          </div>
+        )}
 
         <div className="flex items-center justify-between">
           <span className="text-[#7E5265]">Cloud Data Sync:</span>
           <span className="font-bold text-[#226947] flex items-center gap-1">
             <Database className="w-3.5 h-3.5 text-[#58B988]" />
-            <span>Past Records Preserved</span>
+            <span>Synced to User Profile</span>
           </span>
         </div>
 
@@ -189,7 +381,7 @@ export const Login: React.FC<LoginProps> = ({
           <span className="text-[#7E5265]">Membership Tier:</span>
           <span className="font-bold text-[#D9658B] flex items-center gap-1">
             <Crown className="w-3.5 h-3.5" />
-            <span>{isPremiumMember ? `Premium (${membershipPlan})` : 'Free Sanctuary Member'}</span>
+            <span>{isPremiumMember ? `Premium (${membershipPlan || 'Active'})` : 'Free Sanctuary Member'}</span>
           </span>
         </div>
       </div>
@@ -207,29 +399,20 @@ export const Login: React.FC<LoginProps> = ({
 
         <button
           type="button"
-          onClick={handleGoogleSignIn}
-          disabled={isSigningIn}
-          className="w-full py-2.5 px-4 bg-white hover:bg-slate-50 text-[#3D1E28] border border-[#F4D5DC] rounded-2xl text-xs font-semibold shadow-2xs transition-all flex items-center justify-center gap-2"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-[#D9658B]" />
-          <span>Switch Account / Sign in with Another Google Email</span>
-        </button>
-
-        <button
-          type="button"
           onClick={logout}
-          className="w-full py-2 px-4 text-[#7E5265] hover:text-[#D9658B] text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+          disabled={isSigningIn}
+          className="w-full py-2.5 px-4 bg-white hover:bg-[#FFF0F3] text-[#7E5265] hover:text-[#D9658B] border border-[#F4D5DC] rounded-2xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 disabled:opacity-60"
         >
-          <LogOut className="w-3.5 h-3.5" />
+          {isSigningIn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
           <span>Sign Out</span>
         </button>
       </div>
     </div>
   );
 
-  // If user is NOT authenticated (or is guest), show the full Sign-In / Register form
+  // Sign-In / Register / Forgot Password / Phone form
   const content = (
-    <div className="w-full max-w-md mx-auto bg-white/95 backdrop-blur-md rounded-3xl border border-[#F4D5DC] shadow-xl p-6 sm:p-8 space-y-6 relative overflow-hidden">
+    <div className="w-full max-w-md mx-auto bg-white/95 backdrop-blur-md rounded-3xl border border-[#F4D5DC] shadow-xl p-6 sm:p-8 space-y-5 relative overflow-hidden">
       {/* Decorative ambient subtle glow */}
       <div className="absolute -top-12 -right-12 w-32 h-32 bg-[#FCECEF] rounded-full blur-2xl pointer-events-none -z-10 opacity-70" />
 
@@ -255,12 +438,20 @@ export const Login: React.FC<LoginProps> = ({
         </div>
 
         <h2 className="text-xl sm:text-2xl font-serif font-bold text-[#3D1E28]">
-          {authMode === 'signin' ? 'Welcome Back to Sakhi' : 'Create Your Sanctuary'}
+          {authMode === 'signin' && 'Sign In to Sakhi'}
+          {authMode === 'register' && 'Create Your Account'}
+          {authMode === 'forgot' && 'Reset Your Password'}
+          {authMode === 'phone' && 'Sign In with Phone'}
         </h2>
         <p className="text-xs text-[#7E5265] max-w-xs mx-auto">
-          {authMode === 'signin'
-            ? 'Sign in with your Google email ID to access synced cycle history, past health logs, and doctor care.'
-            : 'Join Sakhi Cycle for private, cloud-synced menstrual wellness and personalized insights.'}
+          {authMode === 'signin' &&
+            'Sign in with your email and password to access your private cycle logs and doctor reports.'}
+          {authMode === 'register' &&
+            'Join Sakhi Cycle for private, encrypted menstrual wellness and personalized insights.'}
+          {authMode === 'forgot' &&
+            "Enter your account email and we'll send you a secure link to reset your password."}
+          {authMode === 'phone' &&
+            'Authenticate securely with your mobile number via Firebase SMS verification.'}
         </p>
       </div>
 
@@ -273,9 +464,19 @@ export const Login: React.FC<LoginProps> = ({
       )}
 
       {localFeedback && (
-        <div className="p-3 bg-[#FFF3F5] border border-[#F4D5DC] text-[#C54E74] rounded-2xl text-xs flex items-center gap-2 animate-fadeIn">
-          <AlertCircle className="w-4 h-4 text-[#D9658B] shrink-0" />
-          <span>{localFeedback}</span>
+        <div
+          className={`p-3 rounded-2xl text-xs flex items-center gap-2 animate-fadeIn ${
+            localFeedback.type === 'success'
+              ? 'bg-[#F3FAF5] border border-[#BFE7D0] text-[#226947]'
+              : 'bg-[#FFF0F3] border border-[#F4D5DC] text-[#C54E74]'
+          }`}
+        >
+          {localFeedback.type === 'success' ? (
+            <CheckCircle className="w-4 h-4 text-[#58B988] shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-[#D9658B] shrink-0" />
+          )}
+          <span>{localFeedback.message}</span>
         </div>
       )}
 
@@ -296,42 +497,327 @@ export const Login: React.FC<LoginProps> = ({
         </div>
       )}
 
-      {/* 1. Primary Google Sign-In Actions */}
-      <div className="space-y-3">
-        {/* Quick One-Click Sign In for Aditi */}
+      {/* Mode Switcher Tabs */}
+      <div className="grid grid-cols-3 bg-[#FFF0F3] p-1 rounded-2xl border border-[#F4D5DC]">
         <button
           type="button"
-          onClick={() => handleDirectGoogleSignIn('aditisri991177@gmail.com')}
-          disabled={isSigningIn}
-          className="w-full flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-[#FFF0F3] to-[#FCECEF] border border-[#F4D5DC] hover:border-[#D9658B] text-left transition-all hover:shadow-xs group"
+          onClick={() => {
+            setAuthMode('signin');
+            clearAuthError();
+            clearAuthNotice();
+            setLocalFeedback(null);
+          }}
+          className={`py-1.5 rounded-xl text-xs font-bold transition-all text-center ${
+            authMode === 'signin' ? 'bg-white text-[#D9658B] shadow-xs' : 'text-[#7E5265]'
+          }`}
         >
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-[#D9658B] text-white flex items-center justify-center text-xs font-bold shadow-xs">
-              A
-            </div>
-            <div>
-              <div className="text-xs font-bold text-[#3D1E28] group-hover:text-[#D9658B] transition-colors flex items-center gap-1.5">
-                <span>Sign in as Aditi</span>
-                <span className="text-[10px] px-2 py-0.2 rounded-full bg-[#EBF7EE] text-[#226947] font-semibold border border-[#BFE7D0]">
-                  One-Click
-                </span>
+          Sign In
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setAuthMode('register');
+            clearAuthError();
+            clearAuthNotice();
+            setLocalFeedback(null);
+          }}
+          className={`py-1.5 rounded-xl text-xs font-bold transition-all text-center ${
+            authMode === 'register' ? 'bg-white text-[#D9658B] shadow-xs' : 'text-[#7E5265]'
+          }`}
+        >
+          Register
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setAuthMode('phone');
+            clearAuthError();
+            clearAuthNotice();
+            setLocalFeedback(null);
+          }}
+          className={`py-1.5 rounded-xl text-xs font-bold transition-all text-center ${
+            authMode === 'phone' ? 'bg-white text-[#D9658B] shadow-xs' : 'text-[#7E5265]'
+          }`}
+        >
+          Phone
+        </button>
+      </div>
+
+      {/* PHONE AUTHENTICATION FORM */}
+      {authMode === 'phone' ? (
+        <div className="space-y-3.5 text-left">
+          {!phoneConfirmationPending ? (
+            <form onSubmit={handleSendPhoneCode} className="space-y-3.5">
+              <div>
+                <label className="block text-[11px] font-semibold text-[#3D1E28] mb-1">
+                  Mobile Number (with country code)
+                </label>
+                <div className="relative">
+                  <input
+                    type="tel"
+                    required
+                    disabled={isSigningIn || phoneSubmitting}
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="+91 98765 43210"
+                    className="w-full pl-9 pr-3 py-2.5 text-xs rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-2 focus:ring-[#D9658B] transition-all disabled:opacity-60"
+                  />
+                  <Phone className="w-3.5 h-3.5 text-[#7E5265] absolute left-3 top-3 pointer-events-none" />
+                </div>
+                <p className="text-[10px] text-[#7E5265] mt-1">
+                  Include international prefix (e.g., +91 for India, +1 for USA)
+                </p>
               </div>
-              <div className="text-[11px] text-[#7E5265]">aditisri991177@gmail.com</div>
+
+              <button
+                type="submit"
+                disabled={isSigningIn || phoneSubmitting}
+                className="w-full py-3 px-4 bg-[#D9658B] hover:bg-[#C54E74] text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-[#D9658B]/20 hover:shadow-lg transition-all active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {phoneSubmitting || isSigningIn ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Sending Code...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Send Verification Code</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyOtp} className="space-y-3.5">
+              <div>
+                <label className="block text-[11px] font-semibold text-[#3D1E28] mb-1">
+                  Enter 6-Digit SMS Code
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    disabled={isSigningIn || phoneSubmitting}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value)}
+                    placeholder="123456"
+                    className="w-full pl-9 pr-3 py-2.5 text-xs font-mono tracking-widest text-center rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-2 focus:ring-[#D9658B] transition-all disabled:opacity-60 text-lg"
+                  />
+                  <KeyRound className="w-3.5 h-3.5 text-[#7E5265] absolute left-3 top-3.5 pointer-events-none" />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSigningIn || phoneSubmitting}
+                className="w-full py-3 px-4 bg-[#D9658B] hover:bg-[#C54E74] text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-[#D9658B]/20 hover:shadow-lg transition-all active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {phoneSubmitting || isSigningIn ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Verifying Code...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Verify & Sign In</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setOtpCode('');
+                  clearAuthError();
+                  clearAuthNotice();
+                }}
+                className="w-full text-center text-xs text-[#7E5265] hover:text-[#D9658B] font-semibold pt-1"
+              >
+                Change Phone Number
+              </button>
+            </form>
+          )}
+        </div>
+      ) : (
+        /* EMAIL / PASSWORD FORM */
+        <form onSubmit={handleSubmit} className="space-y-3.5 text-left">
+          {authMode === 'register' && (
+            <div>
+              <label className="block text-[11px] font-semibold text-[#3D1E28] mb-1">
+                Full Name
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  required
+                  disabled={isSigningIn}
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="e.g. Aditi Sharma"
+                  className="w-full pl-9 pr-3 py-2.5 text-xs rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-2 focus:ring-[#D9658B] transition-all disabled:opacity-60"
+                />
+                <UserIcon className="w-3.5 h-3.5 text-[#7E5265] absolute left-3 top-3 pointer-events-none" />
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-[11px] font-semibold text-[#3D1E28] mb-1">
+              Email Address
+            </label>
+            <div className="relative">
+              <input
+                type="email"
+                required
+                disabled={isSigningIn}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@example.com"
+                className="w-full pl-9 pr-3 py-2.5 text-xs rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-2 focus:ring-[#D9658B] transition-all disabled:opacity-60"
+              />
+              <Mail className="w-3.5 h-3.5 text-[#7E5265] absolute left-3 top-3 pointer-events-none" />
             </div>
           </div>
-          <ArrowRight className="w-4 h-4 text-[#D9658B] group-hover:translate-x-0.5 transition-transform" />
-        </button>
+
+          {authMode !== 'forgot' && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-semibold text-[#3D1E28]">
+                  Password
+                </label>
+                {authMode === 'signin' ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('forgot');
+                      clearAuthError();
+                      clearAuthNotice();
+                      setLocalFeedback(null);
+                    }}
+                    className="text-[10px] text-[#D9658B] hover:underline font-semibold"
+                  >
+                    Forgot password?
+                  </button>
+                ) : (
+                  <span className="text-[10px] text-[#7E5265]">6+ characters</span>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  minLength={6}
+                  disabled={isSigningIn}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-9 pr-9 py-2.5 text-xs rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-2 focus:ring-[#D9658B] transition-all disabled:opacity-60"
+                />
+                <Lock className="w-3.5 h-3.5 text-[#7E5265] absolute left-3 top-3 pointer-events-none" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3 text-[#7E5265] hover:text-[#3D1E28] transition-colors"
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {authMode === 'register' && (
+            <div>
+              <label className="block text-[11px] font-semibold text-[#3D1E28] mb-1">
+                Confirm Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  required
+                  minLength={6}
+                  disabled={isSigningIn}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-9 pr-9 py-2.5 text-xs rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-2 focus:ring-[#D9658B] transition-all disabled:opacity-60"
+                />
+                <Lock className="w-3.5 h-3.5 text-[#7E5265] absolute left-3 top-3 pointer-events-none" />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-3 text-[#7E5265] hover:text-[#3D1E28] transition-colors"
+                  title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={isSigningIn}
+            className="w-full py-3 px-4 bg-[#D9658B] hover:bg-[#C54E74] text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-[#D9658B]/20 hover:shadow-lg transition-all active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            {isSigningIn ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Verifying...</span>
+              </>
+            ) : (
+              <>
+                <span>
+                  {authMode === 'signin' && 'Sign In with Email'}
+                  {authMode === 'register' && 'Create Free Account'}
+                  {authMode === 'forgot' && 'Send Password Reset Link'}
+                </span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
+
+          {authMode === 'forgot' && (
+            <div className="text-center pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('signin');
+                  clearAuthError();
+                  clearAuthNotice();
+                  setLocalFeedback(null);
+                }}
+                className="text-xs text-[#7E5265] hover:text-[#D9658B] font-semibold"
+              >
+                ← Back to Sign In
+              </button>
+            </div>
+          )}
+        </form>
+      )}
+
+      {/* Alternative Social Sign In */}
+      <div className="space-y-3 pt-1">
+        <div className="relative flex items-center justify-center">
+          <div className="border-t border-[#FCECEF] w-full" />
+          <span className="bg-white px-3 text-[10px] font-semibold text-[#7E5265] uppercase tracking-wider whitespace-nowrap">
+            or continue with
+          </span>
+          <div className="border-t border-[#FCECEF] w-full" />
+        </div>
 
         <button
           type="button"
           onClick={handleGoogleSignIn}
           disabled={isSigningIn}
-          className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white hover:bg-slate-50 text-[#3D1E28] border border-[#F4D5DC] hover:border-[#D9658B] rounded-2xl text-xs sm:text-sm font-semibold shadow-xs hover:shadow-md transition-all active:scale-[0.98] disabled:opacity-70 group"
+          className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 bg-white hover:bg-slate-50 text-[#3D1E28] border border-[#F4D5DC] rounded-xl text-xs font-semibold shadow-2xs hover:shadow-xs transition-all active:scale-[0.98] disabled:opacity-60"
         >
           {isSigningIn ? (
-            <Loader2 className="w-4 h-4 text-[#D9658B] animate-spin" />
+            <Loader2 className="w-4 h-4 animate-spin text-[#D9658B]" />
           ) : (
-            <svg className="w-4 h-4" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
               <path
                 fill="#4285F4"
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -350,205 +836,26 @@ export const Login: React.FC<LoginProps> = ({
               />
             </svg>
           )}
-          <span>Sign in with Google Popup</span>
+          <span>Continue with Google</span>
+        </button>
+      </div>
+
+      {/* Guest Mode fallback */}
+      <div className="pt-3 border-t border-[#FCECEF] flex items-center justify-between">
+        <button
+          type="button"
+          onClick={handleGuestMode}
+          disabled={isSigningIn}
+          className="text-[11px] text-[#7E5265] hover:text-[#D9658B] flex items-center gap-1 transition-colors disabled:opacity-60"
+        >
+          <Sparkles className="w-3 h-3 text-[#D9658B]" />
+          <span>Continue as Guest</span>
         </button>
 
-        {/* Custom Google Email input toggle (ideal for Vercel if popup domain is unlisted) */}
-        {!showCustomGoogleInput ? (
-          <div className="text-center pt-0.5">
-            <button
-              type="button"
-              onClick={() => setShowCustomGoogleInput(true)}
-              className="text-[11px] text-[#7E5265] hover:text-[#D9658B] hover:underline"
-            >
-              Sign in with another Google Email directly →
-            </button>
-          </div>
-        ) : (
-          <div className="p-3 bg-[#FFF8F8] border border-[#F4D5DC] rounded-2xl space-y-2 animate-fadeIn text-left">
-            <div className="flex items-center justify-between text-[11px] font-semibold text-[#3D1E28]">
-              <span>Direct Google Account ID</span>
-              <button
-                type="button"
-                onClick={() => setShowCustomGoogleInput(false)}
-                className="text-[#7E5265] hover:text-[#3D1E28]"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="email"
-                value={customGoogleEmail}
-                onChange={(e) => setCustomGoogleEmail(e.target.value)}
-                placeholder="you@gmail.com"
-                className="flex-1 px-3 py-2 text-xs rounded-xl border border-[#F4D5DC] bg-white focus:outline-none focus:ring-1 focus:ring-[#D9658B]"
-              />
-              <button
-                type="button"
-                onClick={() => handleDirectGoogleSignIn(customGoogleEmail)}
-                disabled={isSigningIn || !customGoogleEmail}
-                className="px-3 py-2 bg-[#D9658B] hover:bg-[#C54E74] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-60"
-              >
-                Sign In
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Divider */}
-        <div className="relative flex items-center justify-center my-3">
-          <div className="border-t border-[#FCECEF] w-full" />
-          <span className="bg-white px-3 text-[11px] font-medium text-[#7E5265] uppercase tracking-wider whitespace-nowrap">
-            or standard email & password
-          </span>
-          <div className="border-t border-[#FCECEF] w-full" />
-        </div>
-
-        {/* 2. Email / Password Form */}
-        <form onSubmit={handleSubmit} className="space-y-3.5 text-left">
-          {authMode === 'register' && (
-            <div>
-              <label className="block text-[11px] font-semibold text-[#3D1E28] mb-1">
-                Full Name
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  required
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  placeholder="e.g. Aditi Sharma"
-                  className="w-full pl-9 pr-3 py-2.5 text-xs rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-2 focus:ring-[#D9658B] transition-all"
-                />
-                <UserIcon className="w-3.5 h-3.5 text-[#7E5265] absolute left-3 top-3 pointer-events-none" />
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-[11px] font-semibold text-[#3D1E28] mb-1">
-              Email Address
-            </label>
-            <div className="relative">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@example.com"
-                className="w-full pl-9 pr-3 py-2.5 text-xs rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-2 focus:ring-[#D9658B] transition-all"
-              />
-              <Mail className="w-3.5 h-3.5 text-[#7E5265] absolute left-3 top-3 pointer-events-none" />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-[11px] font-semibold text-[#3D1E28]">
-                Password
-              </label>
-              {authMode === 'signin' && (
-                <span className="text-[10px] text-[#7E5265]">
-                  6+ characters
-                </span>
-              )}
-            </div>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full pl-9 pr-9 py-2.5 text-xs rounded-xl border border-[#F4D5DC] bg-[#FFF8F8] focus:outline-none focus:ring-2 focus:ring-[#D9658B] transition-all"
-              />
-              <Lock className="w-3.5 h-3.5 text-[#7E5265] absolute left-3 top-3 pointer-events-none" />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-3 text-[#7E5265] hover:text-[#3D1E28] transition-colors"
-                title={showPassword ? 'Hide password' : 'Show password'}
-              >
-                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isSigningIn}
-            className="w-full py-2.5 px-4 bg-[#D9658B] hover:bg-[#C54E74] text-white rounded-xl text-xs sm:text-sm font-bold shadow-md shadow-[#D9658B]/20 hover:shadow-lg transition-all active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2"
-          >
-            {isSigningIn ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Processing...</span>
-              </>
-            ) : (
-              <>
-                <span>{authMode === 'signin' ? 'Sign In with Email' : 'Create Account'}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </>
-            )}
-          </button>
-        </form>
-
-        {/* Toggle between Sign In and Register */}
-        <div className="pt-2 text-center">
-          {authMode === 'signin' ? (
-            <p className="text-xs text-[#7E5265]">
-              Don’t have an account yet?{' '}
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode('register');
-                  clearAuthError();
-                  clearAuthNotice();
-                  setLocalFeedback(null);
-                }}
-                className="text-[#D9658B] hover:underline font-bold"
-              >
-                Create Account
-              </button>
-            </p>
-          ) : (
-            <p className="text-xs text-[#7E5265]">
-              Already have an account?{' '}
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode('signin');
-                  clearAuthError();
-                  clearAuthNotice();
-                  setLocalFeedback(null);
-                }}
-                className="text-[#D9658B] hover:underline font-bold"
-              >
-                Sign In
-              </button>
-            </p>
-          )}
-        </div>
-
-        {/* 3. Instant Guest Mode fallback */}
-        <div className="pt-3 border-t border-[#FCECEF] flex items-center justify-between">
-          <button
-            type="button"
-            onClick={handleGuestMode}
-            disabled={isSigningIn}
-            className="text-[11px] text-[#7E5265] hover:text-[#D9658B] flex items-center gap-1 transition-colors"
-          >
-            <Sparkles className="w-3 h-3 text-[#D9658B]" />
-            <span>Try without account (Instant Guest)</span>
-          </button>
-
-          <span className="text-[10px] text-[#7E5265] flex items-center gap-1">
-            <ShieldCheck className="w-3 h-3 text-[#58B988]" />
-            <span>Private & Encrypted</span>
-          </span>
-        </div>
+        <span className="text-[10px] text-[#7E5265] flex items-center gap-1">
+          <ShieldCheck className="w-3 h-3 text-[#58B988]" />
+          <span>Private & Encrypted</span>
+        </span>
       </div>
     </div>
   );
@@ -557,7 +864,7 @@ export const Login: React.FC<LoginProps> = ({
 
   if (variant === 'modal') {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fadeIn">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
         <div className="w-full max-w-md">{viewToRender}</div>
       </div>
     );
