@@ -8,6 +8,9 @@ import sakhiLogoImg from './images/sakhi_cycle_logo_1790633238466.jpg';
 import bgCloudTrackImg from './images/bg_cloud_track_1790635235900.jpg';
 import bgCloudLearnImg from './images/bg_cloud_learn_1790635251924.jpg';
 import bgCloudCommunityImg from './images/bg_cloud_community_1790635264682.jpg';
+import bgCloudVibesImg from './images/bg_cloud_vibes_1790718675230.jpg';
+import bgCloudPlansImg from './images/bg_cloud_plans_1790718687715.jpg';
+import bgCloudWorkspaceImg from './images/bg_cloud_workspc_1790718700707.jpg';
 
 // Real-Life Doctors photos
 import docAnitaGuptaImg from './images/doc_anita_gupta_1790635278426.jpg';
@@ -26,6 +29,9 @@ export const IMAGES = {
   bgCloudTrack: bgCloudTrackImg,
   bgCloudLearn: bgCloudLearnImg,
   bgCloudCommunity: bgCloudCommunityImg,
+  bgCloudVibes: bgCloudVibesImg,
+  bgCloudPlans: bgCloudPlansImg,
+  bgCloudWorkspace: bgCloudWorkspaceImg,
   // Doctors
   docAnitaGupta: docAnitaGuptaImg,
   docFiruzaParikh: docFiruzaParikhImg,

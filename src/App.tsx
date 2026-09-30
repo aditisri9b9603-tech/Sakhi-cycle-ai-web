@@ -400,7 +400,7 @@ const MainLayout: React.FC = () => {
                 <div className="relative rounded-3xl overflow-hidden border border-white/60 shadow-lg bg-white/40">
                   <div className="relative h-44 sm:h-52 w-full overflow-hidden">
                     <img
-                      src={IMAGES.vibesBreathe}
+                      src={IMAGES.bgCloudVibes}
                       alt="Vibes and tranquility sanctuary"
                       className="w-full h-full object-cover object-center"
                     />
@@ -430,12 +430,62 @@ const MainLayout: React.FC = () => {
             {activeSection === 'plans' && <PlansSection />}
 
             {/* 8. SETTINGS SECTION */}
-            {activeSection === 'settings' && <SettingsSection />}
+            {activeSection === 'settings' && (
+              <div className="space-y-6">
+                <div className="relative rounded-3xl overflow-hidden border border-white/60 shadow-lg bg-white/40">
+                  <div className="relative h-44 sm:h-52 w-full overflow-hidden">
+                    <img
+                      src={IMAGES.bgCloudTrack}
+                      alt="Settings and security cloud sanctuary"
+                      className="w-full h-full object-cover object-center"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#3D1E28]/85 via-[#3D1E28]/50 to-transparent flex items-center p-6 sm:p-8">
+                      <div className="text-white max-w-lg space-y-1.5">
+                        <span className="text-xs uppercase tracking-wider font-bold text-[#F4A6B8] bg-white/20 px-3 py-0.5 rounded-full backdrop-blur-xs">
+                          Profile & Health Vault
+                        </span>
+                        <h2 className="text-2xl sm:text-3xl font-serif font-bold text-white">
+                          Settings & Privacy Controls
+                        </h2>
+                        <p className="text-xs sm:text-sm text-[#FCECEF]">
+                          Configure cycle parameters, medical notifications, export cycle history, and manage cloud backup.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <SettingsSection />
+              </div>
+            )}
 
             {/* 9. LOGIN SECTION */}
             {activeSection === 'login' && (
-              <div className="py-6 flex items-center justify-center">
-                <Login redirectTo="home" />
+              <div className="space-y-6">
+                <div className="relative rounded-3xl overflow-hidden border border-white/60 shadow-lg bg-white/40">
+                  <div className="relative h-44 sm:h-52 w-full overflow-hidden">
+                    <img
+                      src={IMAGES.bgCloudLearn}
+                      alt="Login and authentication cloud sanctuary"
+                      className="w-full h-full object-cover object-center"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#3D1E28]/85 via-[#3D1E28]/50 to-transparent flex items-center p-6 sm:p-8">
+                      <div className="text-white max-w-lg space-y-1.5">
+                        <span className="text-xs uppercase tracking-wider font-bold text-[#F4A6B8] bg-white/20 px-3 py-0.5 rounded-full backdrop-blur-xs">
+                          Secure Cloud Sanctuary
+                        </span>
+                        <h2 className="text-2xl sm:text-3xl font-serif font-bold text-white">
+                          Welcome to Sakhi Cycle
+                        </h2>
+                        <p className="text-xs sm:text-sm text-[#FCECEF]">
+                          Sign in to sync your cycles, symptoms, doctor reports, and Google Workspace integrations securely.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="py-2 flex items-center justify-center">
+                  <Login redirectTo="home" />
+                </div>
               </div>
             )}
           </>
